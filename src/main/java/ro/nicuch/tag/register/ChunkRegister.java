@@ -11,6 +11,7 @@ import org.bukkit.entity.Entity;
 
 import ro.nicuch.lwjnbtl.CompoundTag;
 import ro.nicuch.lwjnbtl.TagType;
+import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.ChunkTagLoadEvent;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
@@ -64,7 +65,8 @@ public class ChunkRegister {
         for (String blockID : blocks.keySet()) {
             this.blocks.put(BlockUUID.fromString(blockID), blocks.getCompound(blockID));
         }
-        Bukkit.getPluginManager().callEvent(new ChunkTagLoadEvent(this, this.chunkTag));
+        Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
+                Bukkit.getPluginManager().callEvent(new ChunkTagLoadEvent(this, this.chunkTag)));
     }
 
     public Chunk getChunk() {
@@ -79,18 +81,18 @@ public class ChunkRegister {
         return this.chunk.getZ();
     }
 
-    public void unload(boolean checkEntities) {
-        this.savePopulation(checkEntities);
+    public void unload(boolean checkEntities, Set<UUID> entitiesArray) {
+        this.savePopulation(checkEntities, entitiesArray);
         this.entities.clear();
         this.blocks.clear();
     }
 
-    public void savePopulation(boolean checkEntities) {
+    public void savePopulation(boolean checkEntities, Set<UUID> entitiesArray) {
         CompoundTag entities = new CompoundTag();
         WorldRegister worldRegister = this.register.getWorldRegister();
         if (checkEntities) {
-            for (Entity entity : this.chunk.getEntities())
-                worldRegister.getStoredEntity(entity.getUniqueId()).ifPresent(compoundTag -> entities.put(entity.getUniqueId().toString(), compoundTag));
+            for (UUID entitiyUUID : entitiesArray)
+                worldRegister.getStoredEntity(entitiyUUID).ifPresent(compoundTag -> entities.put(entitiyUUID.toString(), compoundTag));
         } else {
             for (UUID uuid : this.entities) {
                 if (worldRegister.isEntityStored(uuid)) {

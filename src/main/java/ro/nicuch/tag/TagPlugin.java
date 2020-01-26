@@ -15,7 +15,7 @@ public class TagPlugin extends JavaPlugin {
         this.getCommand("trl_backup").setExecutor(commands);
         this.getCommand("trl_overwrite").setExecutor(commands);
         this.getCommand("trl_reset").setExecutor(commands);
-        Bukkit.getPluginManager().registerEvents(new TagListener(), this);
+        Bukkit.getPluginManager().registerEvents(new TagListener(this), this);
         Bukkit.getPluginManager().registerEvents(new CoruptedDataListener(), this);
         this.autoUnload();
     }
@@ -27,6 +27,6 @@ public class TagPlugin extends JavaPlugin {
     }
 
     private void autoUnload() {
-        this.task = Bukkit.getScheduler().runTaskTimer(this, TagRegister::tryUnloading, 60 * 20L, 10 * 20L);
+        this.task = Bukkit.getScheduler().runTaskTimerAsynchronously(this, TagRegister::tryUnloading, 60 * 20L, 10 * 20L);
     }
 }

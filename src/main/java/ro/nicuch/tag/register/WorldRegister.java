@@ -17,6 +17,7 @@ import org.bukkit.entity.LivingEntity;
 
 import ro.nicuch.lwjnbtl.CompoundTag;
 import ro.nicuch.lwjnbtl.TagIO;
+import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.WorldTagLoadEvent;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
@@ -47,7 +48,8 @@ public class WorldRegister implements CoruptedDataFallback {
             }
         }
         this.readWorldFile();
-        Bukkit.getPluginManager().callEvent(new WorldTagLoadEvent(this, this.worldTag));
+        Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
+                Bukkit.getPluginManager().callEvent(new WorldTagLoadEvent(this, this.worldTag)));
     }
 
     public File getDirectory() {

@@ -1,5 +1,6 @@
 package ro.nicuch.tag;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.event.EventHandler;
@@ -11,30 +12,29 @@ import org.bukkit.event.world.WorldSaveEvent;
 
 import ro.nicuch.tag.register.RegionRegister;
 import ro.nicuch.tag.register.WorldRegister;
+import ro.nicuch.tag.thread.TagRunnable;
 
 public class TagListener implements Listener {
+    private final TagPlugin plugin;
+    private final TagRunnable tagRunnable;
+
+    public TagListener(TagPlugin plugin) {
+        this.tagRunnable = new TagRunnable();
+        Bukkit.getScheduler().runTaskTimerAsynchronously((this.plugin = plugin), this.tagRunnable, 1L, 1L);
+    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(ChunkLoadEvent event) {
-        World world = event.getWorld();
-        Chunk chunk = event.getChunk();
-        WorldRegister wr = TagRegister.getWorld(world).orElseGet(() -> TagRegister.loadWorld(world));
-        RegionRegister rr = wr.getRegion(chunk).orElseGet(() -> wr.loadRegion(chunk));
-        if (rr.isChunkNotLoaded(chunk))
-            rr.loadChunk(chunk);
+        this.tagRunnable.addToLoad(event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(ChunkUnloadEvent event) {
-        World world = event.getWorld();
-        Chunk chunk = event.getChunk();
-        WorldRegister wr = TagRegister.getWorld(world).orElseGet(() -> TagRegister.loadWorld(world));
-        RegionRegister rr = wr.getRegion(chunk).orElseGet(() -> wr.loadRegion(chunk));
-        rr.unloadChunk(chunk);
+        this.tagRunnable.addToUnload(event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(WorldSaveEvent event) {
-        TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions();
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions());
     }
 }

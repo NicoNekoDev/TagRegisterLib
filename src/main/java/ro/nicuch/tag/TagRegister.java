@@ -111,4 +111,8 @@ public class TagRegister {
     public static Logger getLogger() {
         return Bukkit.getLogger();
     }
+
+    public static TagPlugin getPlugin() {
+        return (TagPlugin) Bukkit.getPluginManager().getPlugin("TagRegisterLib");
+    }
 }
