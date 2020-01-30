@@ -11,7 +11,7 @@ public class TagProcessLoad extends TagProcess {
     private final ChunkLoadEvent event;
 
     public TagProcessLoad(ChunkLoadEvent event) {
-        super(TagProcessType.LOAD);
+        super(TagProcessType.LOAD, event.getChunk());
         this.event = event;
     }
 
@@ -23,5 +23,17 @@ public class TagProcessLoad extends TagProcess {
         RegionRegister rr = wr.getRegion(chunk).orElseGet(() -> wr.loadRegion(chunk));
         if (rr.isChunkNotLoaded(chunk))
             rr.loadChunk(chunk);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof TagProcessLoad)) return false;
+        TagProcessLoad that = (TagProcessLoad) o;
+        return this.getProcessId().equals(((TagProcessLoad) o).getProcessId());
+    }
+
+    @Override
+    public int hashCode() {
+        return this.getProcessId().hashCode() * 31;
     }
 }

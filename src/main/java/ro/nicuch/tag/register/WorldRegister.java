@@ -131,14 +131,14 @@ public class WorldRegister implements CoruptedDataFallback {
                 region.writeRegionFile();
             }
         }
-        Set<UUID> livingEntities = new HashSet<>();
-        for (LivingEntity entity : this.world.getLivingEntities())
-            livingEntities.add(entity.getUniqueId());
+        Set<UUID> worldEntities = new HashSet<>();
+        for (Entity entity : this.world.getEntities())
+            worldEntities.add(entity.getUniqueId());
         for (UUID uuid : this.entities.keySet()) {
-            if (!livingEntities.contains(uuid))
+            if (!worldEntities.contains(uuid))
                 this.entities.remove(uuid);
         }
-        livingEntities.clear();
+        worldEntities.clear(); // manual gc
     }
 
     public void saveRegions() {
