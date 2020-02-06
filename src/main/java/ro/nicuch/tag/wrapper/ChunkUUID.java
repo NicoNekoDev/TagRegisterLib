@@ -3,6 +3,7 @@ package ro.nicuch.tag.wrapper;
 import org.bukkit.Chunk;
 import ro.nicuch.tag.register.ChunkRegister;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,6 +66,6 @@ public class ChunkUUID {
 
     @Override
     public int hashCode() {
-        return this.toString().hashCode() * 6871;
-    } //hascode = string.hashcode + prime number
+        return Objects.hash(x, z, this.toString());
+    }
 }

@@ -2,6 +2,7 @@ package ro.nicuch.tag.wrapper;
 
 import org.bukkit.block.Block;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,6 +68,6 @@ public class BlockUUID {
 
     @Override
     public int hashCode() {
-        return this.toString().hashCode() * 5099;
-    } //hascode = string.hashcode + prime number
+        return Objects.hash(x, y, z, this.toString());
+    }
 }

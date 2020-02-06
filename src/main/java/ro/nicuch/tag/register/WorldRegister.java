@@ -203,19 +203,4 @@ public class WorldRegister implements CoruptedDataFallback {
     public World getWorldInstance() {
         return this.world;
     }
-
-    //Needed for GC
-    @Override
-    public int hashCode() {
-        return world.hashCode() * 379;
-    }
-
-    //Needed for GC
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof WorldRegister))
-            return false;
-        WorldRegister worldRegister = (WorldRegister) obj;
-        return this.world.equals(worldRegister.getWorldInstance()); //TODO a better world implementation
-    }
 }

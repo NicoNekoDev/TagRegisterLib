@@ -202,19 +202,4 @@ public class RegionRegister implements CoruptedDataFallback {
     public CompoundTag getCoruptedDataCompoundTag() {
         return this.regionTag;
     }
-
-    //Needed for GC
-    @Override
-    public int hashCode() {
-        return uuid.hashCode() * 569;
-    }
-
-    //Needed for GC
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof RegionRegister))
-            return false;
-        RegionRegister regionRegister = (RegionRegister) obj;
-        return this.getRegionUUID().equals(regionRegister.getRegionUUID());
-    }
 }

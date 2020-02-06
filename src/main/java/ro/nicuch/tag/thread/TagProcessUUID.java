@@ -3,6 +3,8 @@ package ro.nicuch.tag.thread;
 import org.bukkit.Chunk;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
+import java.util.Objects;
+
 public class TagProcessUUID {
     private final ChunkUUID chunkUUID;
     private final TagProcessType processType;
@@ -26,6 +28,6 @@ public class TagProcessUUID {
 
     @Override
     public int hashCode() {
-        return chunkUUID.hashCode() * 23;
+        return Objects.hash(this.chunkUUID, this.processType);
     }
 }

@@ -12,10 +12,10 @@ public class TagRunnable implements Runnable {
     // ASYNC CALL
     @Override
     public void run() {
-        for (ConcurrentMap.Entry<TagProcessUUID, TagProcess> entry : this.processes.entrySet()) {
-            entry.getValue().run();
-            this.processes.remove(entry.getKey());
-        }
+        this.processes.forEach((key, value) -> {
+            value.run();
+            this.processes.remove(key);
+        });
     }
 
     // SYNC CALLS

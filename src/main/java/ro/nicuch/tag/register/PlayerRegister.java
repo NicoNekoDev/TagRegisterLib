@@ -96,19 +96,4 @@ public class PlayerRegister implements CoruptedDataFallback {
     public UUID getPlayerUUID() {
         return this.uuid;
     }
-
-    //Needed for GC
-    @Override
-    public int hashCode() {
-        return uuid.hashCode() * 661;
-    }
-
-    //Needed for GC
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof PlayerRegister))
-            return false;
-        PlayerRegister playerRegister = (PlayerRegister) obj;
-        return this.getPlayerUUID().equals(playerRegister.getPlayerUUID());
-    }
 }

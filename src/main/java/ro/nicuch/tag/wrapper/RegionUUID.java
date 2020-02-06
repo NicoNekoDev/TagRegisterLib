@@ -3,6 +3,7 @@ package ro.nicuch.tag.wrapper;
 import org.bukkit.Chunk;
 import ro.nicuch.tag.register.RegionRegister;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,6 +66,6 @@ public class RegionUUID {
 
     @Override
     public int hashCode() {
-        return this.toString().hashCode() * 7253;
-    } //hascode = string.hashcode + prime number
+        return Objects.hash(x, z, this.toString());
+    }
 }

@@ -143,20 +143,4 @@ public class ChunkRegister {
     public CompoundTag getChunkTag() {
         return this.chunkTag;
     }
-
-
-    //Needed for GC
-    @Override
-    public int hashCode() {
-        return uuid.hashCode() * 487;
-    }
-
-    //Needed for GC
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof ChunkRegister))
-            return false;
-        ChunkRegister chunkRegister = (ChunkRegister) obj;
-        return this.getChunkUUID().equals(chunkRegister.getChunkUUID());
-    }
 }

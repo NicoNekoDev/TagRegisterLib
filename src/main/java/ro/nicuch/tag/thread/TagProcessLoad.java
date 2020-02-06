@@ -7,6 +7,8 @@ import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.register.RegionRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
+import java.util.Objects;
+
 public class TagProcessLoad extends TagProcess {
     private final ChunkLoadEvent event;
 
@@ -34,6 +36,6 @@ public class TagProcessLoad extends TagProcess {
 
     @Override
     public int hashCode() {
-        return this.getProcessId().hashCode() * 31;
+        return Objects.hashCode(this.getProcessId());
     }
 }
