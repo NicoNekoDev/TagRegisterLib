@@ -9,6 +9,7 @@ import ro.nicuch.tag.register.RegionRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,6 +42,6 @@ public class TagProcessUnload extends TagProcess {
 
     @Override
     public int hashCode() {
-        return this.getProcessId().hashCode() * 17;
+        return Objects.hashCode(this.getProcessId());
     }
 }
