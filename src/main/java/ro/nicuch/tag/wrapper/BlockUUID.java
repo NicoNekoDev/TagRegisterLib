@@ -11,7 +11,7 @@ public class BlockUUID {
     private final int y;
     private final int z;
 
-    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
+    private final static Pattern pattern = Pattern.compile("<x[-]?([0-9]+),y[-]?([0-9]+),z[-]?([0-9]+)>");
 
     public BlockUUID(final Block block) {
         this(block.getX(), block.getY(), block.getZ());
