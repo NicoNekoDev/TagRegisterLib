@@ -3,29 +3,26 @@ package ro.nicuch.tag.thread;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class TagRunnable implements Runnable {
-    private final ConcurrentMap<TagProcessUUID, TagProcess> processes = new ConcurrentHashMap<>();
+    private final Queue<TagProcess> processes = new LinkedList<>();
 
     // ASYNC CALL
     @Override
     public void run() {
-        this.processes.forEach((key, value) -> {
-            value.run();
-            this.processes.remove(key);
-        });
+        while (!this.processes.isEmpty()) {
+            this.processes.poll().run();
+        }
     }
 
     // SYNC CALLS
     public void addToLoad(ChunkLoadEvent event) {
-        TagProcessLoad tagProcess = new TagProcessLoad(event);
-        this.processes.putIfAbsent(tagProcess.getProcessId(), tagProcess);
+        this.processes.offer(new TagProcessLoad(event));
     }
 
     public void addToUnload(ChunkUnloadEvent event) {
-        TagProcessUnload tagProcess = new TagProcessUnload(event);
-        this.processes.putIfAbsent(tagProcess.getProcessId(), tagProcess);
+        this.processes.offer(new TagProcessUnload(event));
     }
 }
