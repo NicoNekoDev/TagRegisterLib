@@ -11,7 +11,7 @@ public class ChunkUUID {
     private final int x;
     private final int z;
 
-    private final static Pattern pattern = Pattern.compile("<x[-]?([0-9]+),z[-]?([0-9]+)>");
+    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),z([-]?[0-9]+)>");
 
     public ChunkUUID(final Chunk chunk) {
         this(chunk.getX(), chunk.getZ());

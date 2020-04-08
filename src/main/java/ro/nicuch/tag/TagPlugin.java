@@ -23,6 +23,7 @@ public class TagPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         this.task.cancel();
+        TagRegister.tryUnloading(); //last time
         TagRegister.saveAll();
     }
 

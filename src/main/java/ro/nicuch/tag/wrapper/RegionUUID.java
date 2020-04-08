@@ -11,11 +11,7 @@ public class RegionUUID {
     private final int x;
     private final int z;
 
-    private final static Pattern pattern = Pattern.compile("<x[-]?([0-9]+),z[-]?([0-9]+)>");
-
-    public RegionUUID(final Chunk chunk) {
-        this(Math.floorDiv(chunk.getX(), 32), Math.floorDiv(chunk.getZ(), 32));
-    }
+    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),z([-]?[0-9]+)>");
 
     public RegionUUID(final RegionRegister register) {
         this(register.getX(), register.getZ());
@@ -35,7 +31,7 @@ public class RegionUUID {
     }
 
     public static RegionUUID fromChunk(Chunk chunk) {
-        return new RegionUUID(chunk);
+        return new RegionUUID(Math.floorDiv(chunk.getX(), 32), Math.floorDiv(chunk.getZ(), 32));
     }
 
     public static RegionUUID fromString(String id) {

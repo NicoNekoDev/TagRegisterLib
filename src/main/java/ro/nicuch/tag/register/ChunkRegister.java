@@ -1,14 +1,10 @@
 package ro.nicuch.tag.register;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
+import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-
 import ro.nicuch.lwjnbtl.CompoundTag;
 import ro.nicuch.lwjnbtl.TagType;
 import ro.nicuch.tag.TagRegister;
@@ -16,10 +12,15 @@ import ro.nicuch.tag.events.ChunkTagLoadEvent;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
 public class ChunkRegister {
     private final RegionRegister register;
     private final Chunk chunk;
-    private final ConcurrentMap<BlockUUID, CompoundTag> blocks = new ConcurrentHashMap<>();
+    private final LockFreeMap<BlockUUID, CompoundTag> blocks = LockFreeMap.newMap(1);
     private final Set<UUID> entities = new HashSet<>();
     private final CompoundTag chunkTag;
 
@@ -102,7 +103,7 @@ public class ChunkRegister {
         }
         CompoundTag blocks = new CompoundTag();
         for (BlockUUID blockUUID : this.blocks.keySet()) {
-            blocks.put(blockUUID.toString(), this.blocks.get(blockUUID));
+            blocks.put(blockUUID.toString(), this.blocks.getUnsafe(blockUUID));
         }
         this.chunkTag.put("entities", entities);
         this.chunkTag.put("blocks", blocks);
@@ -113,27 +114,43 @@ public class ChunkRegister {
         return this.blocks.containsKey(BlockUUID.fromBlock(block));
     }
 
-    public synchronized Optional<CompoundTag> getStoredBlock(Block block) {
-        return Optional.ofNullable(this.blocks.get(BlockUUID.fromBlock(block)));
+    public Optional<CompoundTag> getStoredBlock(Block block) {
+        return this.blocks.get(BlockUUID.fromBlock(block));
     }
 
-    public synchronized CompoundTag createStoredBlock(Block block) {
+    public CompoundTag createStoredBlock(Block block) {
         BlockUUID blockUUID = BlockUUID.fromBlock(block);
         CompoundTag tag = new CompoundTag();
-        this.blocks.putIfAbsent(blockUUID, tag);
+        this.blocks.put(blockUUID, tag);
         return tag;
     }
 
+    public Set<UUID> getStoredEntitiesOnThisChunk() {
+        return this.entities;
+    }
+
     public boolean isEntityStored(Entity entity) {
-        return this.register.isEntityStored(entity);
+        return this.isEntityStored(entity.getUniqueId());
     }
 
     public Optional<CompoundTag> getStoredEntity(Entity entity) {
-        return this.register.getStoredEntity(entity);
+        return this.getStoredEntity(entity.getUniqueId());
     }
 
     public CompoundTag createStoredEntity(Entity entity) {
-        return this.register.createStoredEntity(entity);
+        return this.createStoredEntity(entity.getUniqueId());
+    }
+
+    public boolean isEntityStored(UUID uuid) {
+        return this.register.isEntityStored(uuid);
+    }
+
+    public Optional<CompoundTag> getStoredEntity(UUID uuid) {
+        return this.register.getStoredEntity(uuid);
+    }
+
+    public CompoundTag createStoredEntity(UUID uuid) {
+        return this.register.createStoredEntity(uuid);
     }
 
     public RegionRegister getRegionRegister() {

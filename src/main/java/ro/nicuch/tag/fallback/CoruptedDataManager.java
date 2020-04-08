@@ -1,19 +1,18 @@
 package ro.nicuch.tag.fallback;
 
+import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 
 import java.io.File;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class CoruptedDataManager {
-    private final static ConcurrentMap<String, CoruptedDataBackup> coruptedData = new ConcurrentHashMap<>();
+    private final static LockFreeMap<String, CoruptedDataBackup> coruptedData = LockFreeMap.newMap(1);
     private static CoruptedDataListener coruptedListener;
 
     public static boolean reportErrors() {
-        return !coruptedData.isEmpty();
+        return coruptedData.size() != 0;
     }
 
     public static void fallbackOperation(CoruptedDataFallback fallback) {

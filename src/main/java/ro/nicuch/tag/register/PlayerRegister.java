@@ -60,8 +60,8 @@ public class PlayerRegister implements CoruptedDataFallback {
     }
 
     public void readPlayerFile() {
-        try {
-            this.playerTag = TagIO.readInputStream(new FileInputStream(this.playerFile));
+        try (FileInputStream fileInputStream = new FileInputStream(this.playerFile)) {
+            this.playerTag = TagIO.readInputStream(fileInputStream);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Reading) Player file <" + this.uuid.toString() + ".dat> is corupted!");
@@ -69,8 +69,8 @@ public class PlayerRegister implements CoruptedDataFallback {
     }
 
     public void writePlayerFile() {
-        try {
-            TagIO.writeOutputStream(this.playerTag, new FileOutputStream(this.playerFile));
+        try (FileOutputStream fileOutputStream = new FileOutputStream(this.playerFile)) {
+            TagIO.writeOutputStream(this.playerTag, fileOutputStream);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) Player file <" + this.uuid.toString() + ".dat> is corupted!");
