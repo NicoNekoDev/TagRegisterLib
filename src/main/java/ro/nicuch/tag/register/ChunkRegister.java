@@ -11,10 +11,7 @@ import ro.nicuch.tag.events.ChunkTagLoadEvent;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -42,22 +39,18 @@ public class ChunkRegister {
             this.chunkTag = (CompoundTag) regionTag.get(chunkID);
         else {
             this.chunkTag = new CompoundTag();
-            regionTag.put(chunkID, chunkTag);
         }
-        CompoundTag chunkTag = this.chunkTag;
         CompoundTag entities;
-        if (chunkTag.contains("entities", TagType.COMPOUND))
-            entities = chunkTag.getCompound("entities");
+        if (this.chunkTag.contains("entities", TagType.COMPOUND))
+            entities = this.chunkTag.getCompound("entities");
         else {
             entities = new CompoundTag();
-            chunkTag.put("entities", entities);
         }
         CompoundTag blocks;
-        if (chunkTag.contains("blocks", TagType.COMPOUND))
-            blocks = chunkTag.getCompound("blocks");
+        if (this.chunkTag.contains("blocks", TagType.COMPOUND))
+            blocks = this.chunkTag.getCompound("blocks");
         else {
             blocks = new CompoundTag();
-            chunkTag.put("blocks", blocks);
         }
         for (String entityID : entities.keySet()) {
             UUID entityUUID = UUID.fromString(entityID);
@@ -94,7 +87,10 @@ public class ChunkRegister {
         WorldRegister worldRegister = this.register.getWorldRegister();
         if (checkEntities) {
             for (UUID entitiyUUID : entitiesArray)
-                worldRegister.getStoredEntity(entitiyUUID).ifPresent(compoundTag -> entities.put(entitiyUUID.toString(), compoundTag));
+                worldRegister.getStoredEntity(entitiyUUID).ifPresent(compoundTag -> {
+                    if (!compoundTag.isEmpty())
+                        entities.put(entitiyUUID.toString(), compoundTag);
+                });
         } else {
             for (UUID uuid : this.entities) {
                 if (worldRegister.isEntityStored(uuid)) {
@@ -103,15 +99,24 @@ public class ChunkRegister {
             }
         }
         CompoundTag blocks = new CompoundTag();
-        for (BlockUUID blockUUID : this.blocks.keySet()) {
-            blocks.put(blockUUID.toString(), this.blocks.get(blockUUID));
+        for (Map.Entry<BlockUUID, CompoundTag> blockEntry : this.blocks.entrySet()) {
+            if (!blockEntry.getValue().isEmpty())
+                blocks.put(blockEntry.getKey().toString(), blockEntry.getValue());
         }
         if (!entities.isEmpty())
             this.chunkTag.put("entities", entities);
+        else if (this.chunkTag.containsCompound("entities"))
+            this.chunkTag.remove("entities");
         if (!blocks.isEmpty())
             this.chunkTag.put("blocks", blocks);
+        else if (this.chunkTag.containsCompound("blocks"))
+            this.chunkTag.remove("blocks");
+        CompoundTag regionTag = this.register.getRegionTag();
+        String uuid = this.uuid.toString();
         if (!this.chunkTag.isEmpty())
-            this.register.getRegionTag().put(this.uuid.toString(), this.chunkTag);
+            regionTag.put(uuid, this.chunkTag);
+        else if (regionTag.containsCompound(uuid))
+            regionTag.remove(uuid);
     }
 
     public boolean isBlockStored(Block block) {

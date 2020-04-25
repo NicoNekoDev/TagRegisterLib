@@ -7,6 +7,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldSaveEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import ro.nicuch.tag.thread.TagProcessRunnable;
 
 public class TagListener implements Listener {
@@ -29,5 +30,13 @@ public class TagListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(WorldSaveEvent event) {
         Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void event(WorldUnloadEvent event) {
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> {
+            TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions();
+            TagRegister.unloadWorld(event.getWorld());
+        });
     }
 }

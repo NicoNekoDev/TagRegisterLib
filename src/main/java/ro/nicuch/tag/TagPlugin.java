@@ -29,6 +29,6 @@ public class TagPlugin extends JavaPlugin {
     }
 
     private void autoUnload() {
-        this.task = Bukkit.getScheduler().runTaskTimerAsynchronously(this, TagRegister::tryUnloading, 60 * 20L, 10 * 20L);
+        this.task = Bukkit.getScheduler().runTaskTimerAsynchronously(this, TagRegister::tryUnloading, 10 * 20L, 10 * 20L);
     }
 }

@@ -58,14 +58,19 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     protected void writeWorldFile() {
-        if (this.worldTag.isEmpty())
+        if (this.worldTag.isEmpty()) {
+            if (this.worldFile.exists())
+                worldFile.delete();
             return;
-        try {
-            this.worldFile.createNewFile();
-            this.worldFile.setReadable(true, false);
-            this.worldFile.setWritable(true, false);
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+        if (!this.worldFile.exists()) {
+            try {
+                this.worldFile.createNewFile();
+                this.worldFile.setReadable(true, false);
+                this.worldFile.setWritable(true, false);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         try (FileOutputStream fileOutputStream = new FileOutputStream(this.worldFile)) {
             TagIO.writeOutputStream(this.worldTag, fileOutputStream);

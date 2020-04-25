@@ -79,14 +79,19 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     protected void writeRegionFile() {
-        if (this.regionTag.isEmpty())
+        if (this.regionTag.isEmpty()) {
+            if (this.regionFile.exists())
+                this.regionFile.delete();
             return;
-        try {
-            this.regionFile.createNewFile();
-            this.regionFile.setReadable(true, false);
-            this.regionFile.setWritable(true, false);
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+        if (!this.regionFile.exists()) {
+            try {
+                this.regionFile.createNewFile();
+                this.regionFile.setReadable(true, false);
+                this.regionFile.setWritable(true, false);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         try (FileOutputStream fileOutputStream = new FileOutputStream(this.regionFile)) {
             TagIO.writeOutputStream(this.regionTag, fileOutputStream);
