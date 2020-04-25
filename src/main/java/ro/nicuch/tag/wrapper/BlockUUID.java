@@ -1,5 +1,6 @@
 package ro.nicuch.tag.wrapper;
 
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 
 import java.util.Objects;
@@ -54,7 +55,7 @@ public class BlockUUID {
     public boolean equals(Object obj) {
         if (!(obj instanceof BlockUUID)) return false;
         BlockUUID blockUUID = (BlockUUID) obj;
-        return x == blockUUID.getX() && y == blockUUID.getY() && z == blockUUID.getZ();
+        return x == blockUUID.getX() && z == blockUUID.getZ();
     }
 
     @Override

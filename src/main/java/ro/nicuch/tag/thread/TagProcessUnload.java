@@ -5,6 +5,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import ro.nicuch.tag.TagRegister;
+import ro.nicuch.tag.register.ChunkRegister;
 import ro.nicuch.tag.register.RegionRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
@@ -28,7 +29,9 @@ public class TagProcessUnload implements TagRunnable {
         Chunk chunk = this.event.getChunk();
         WorldRegister wr = TagRegister.getWorld(world).orElseGet(() -> TagRegister.loadWorld(world));
         RegionRegister rr = wr.getRegion(chunk).orElseGet(() -> wr.loadRegion(chunk));
-        rr.unloadChunk(chunk, this.entitiesSync);
+        ChunkRegister chunkRegister = rr.unloadChunk(chunk, this.entitiesSync);
         this.entitiesSync.clear();
+        if (TagRegister.isDebugging())
+            System.out.println(chunkRegister.toString() + " unloaded!");
     }
 }

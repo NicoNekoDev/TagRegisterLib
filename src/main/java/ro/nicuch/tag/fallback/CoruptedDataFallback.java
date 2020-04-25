@@ -8,4 +8,5 @@ public interface CoruptedDataFallback {
     String getCoruptedDataId();
     File getCoruptedDataFile();
     CompoundTag getCoruptedDataCompoundTag();
+    String getWorldName();
 }

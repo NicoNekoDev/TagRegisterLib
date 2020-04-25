@@ -15,6 +15,7 @@ public class TagPlugin extends JavaPlugin {
         this.getCommand("trl_backup").setExecutor(commands);
         this.getCommand("trl_overwrite").setExecutor(commands);
         this.getCommand("trl_reset").setExecutor(commands);
+        this.getCommand("trl_debug").setExecutor(commands);
         Bukkit.getPluginManager().registerEvents(new TagListener(this), this);
         Bukkit.getPluginManager().registerEvents(new CoruptedDataListener(), this);
         this.autoUnload();

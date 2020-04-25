@@ -1,6 +1,5 @@
 package ro.nicuch.tag.register;
 
-import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
@@ -18,11 +17,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class RegionRegister implements CoruptedDataFallback {
     private final WorldRegister register;
-    private final LockFreeMap<ChunkUUID, ChunkRegister> chunks = LockFreeMap.newMap(1);
+    private final ConcurrentMap<ChunkUUID, ChunkRegister> chunks = new ConcurrentHashMap<>();
     private final int x;
     private final int z;
     private final File regionFile;
@@ -40,23 +44,20 @@ public class RegionRegister implements CoruptedDataFallback {
 
     public RegionRegister(WorldRegister register, int x, int z) {
         this.uuid = new RegionUUID(x, z);
-
         this.register = register;
         this.x = x;
         this.z = z;
         this.regionFile = new File(register.getDirectory().getPath() + File.separator + "r." + x + "." + z + ".dat");
         if (!this.regionFile.exists()) {
-            try {
-                this.regionFile.createNewFile();
-                this.regionFile.setReadable(true, false);
-                this.regionFile.setWritable(true, false);
-                this.regionTag = new CompoundTag();
-                this.writeRegionFile();
-            } catch (IOException e) {
-                e.printStackTrace();
+            this.regionTag = new CompoundTag();
+        } else {
+            try (FileInputStream fileInputStream = new FileInputStream(this.regionFile)) {
+                this.regionTag = TagIO.readInputStream(fileInputStream);
+            } catch (IOException | NullPointerException ioe) {
+                ioe.printStackTrace();
+                System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");
             }
         }
-        this.readRegionFile();
         Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
                 Bukkit.getPluginManager().callEvent(new RegionTagLoadEvent(this, this.regionTag)));
     }
@@ -77,19 +78,19 @@ public class RegionRegister implements CoruptedDataFallback {
         return this.z;
     }
 
-    public void readRegionFile() {
-        try (FileInputStream fileInputStream = new FileInputStream(this.regionFile)) {
-            this.regionTag = TagIO.readInputStream(fileInputStream);
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-            System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");
+    protected void writeRegionFile() {
+        if (this.regionTag.isEmpty())
+            return;
+        try {
+            this.regionFile.createNewFile();
+            this.regionFile.setReadable(true, false);
+            this.regionFile.setWritable(true, false);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-    }
-
-    public void writeRegionFile() {
         try (FileOutputStream fileOutputStream = new FileOutputStream(this.regionFile)) {
             TagIO.writeOutputStream(this.regionTag, fileOutputStream);
-        } catch (IOException ioe) {
+        } catch (IOException | NullPointerException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) This region file is corupted. -> r." + x + "." + z + ".dat");
             CoruptedDataManager.fallbackOperation(this);
@@ -97,8 +98,8 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean isChunkNotLoaded(Chunk chunk) {
-        //Allways inveted
-        return !this.chunks.containsKey(ChunkUUID.fromChunk(chunk));
+        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        return !this.chunks.containsKey(chunkUUID);
     }
 
     public boolean isChunkNotLoaded(ChunkUUID chunkUUID) {
@@ -112,37 +113,38 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public Optional<ChunkRegister> getChunk(Chunk chunk) {
-        return this.getChunk(ChunkUUID.fromChunk(chunk));
+        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        return Optional.ofNullable(this.chunks.get(chunkUUID));
     }
 
     public Optional<ChunkRegister> getChunk(ChunkUUID chunkUUID) {
-        return this.chunks.get(chunkUUID);
+        return Optional.ofNullable(this.chunks.get(chunkUUID));
     }
 
     public ChunkRegister removeChunk(Chunk chunk) {
-        return this.chunks.removeAndReturn(ChunkUUID.fromChunk(chunk));
+        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        return this.chunks.remove(chunkUUID);
     }
 
-    public void unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
-        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
-        Optional<ChunkRegister> chunkRegisterOptional = this.getChunk(chunkUUID);
+    public ChunkRegister unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
+        Optional<ChunkRegister> chunkRegisterOptional = this.getChunk(chunk);
         if (chunkRegisterOptional.isPresent()) {
-            chunkRegisterOptional.get().unload(true, entitiesArray);
-            this.chunks.remove(chunkUUID);
+            ChunkRegister chunkRegister = chunkRegisterOptional.get();
+            chunkRegister.unload(true, entitiesArray);
+            return this.chunks.remove(chunkRegister.getChunkUUID());
         }
+        return null;
     }
 
     public boolean canBeUnloaded() {
-
         for (ChunkUUID chunkUUID : this.chunks.keySet()) {
-            ChunkRegister chunkRegister = this.chunks.getUnsafe(chunkUUID);
+            ChunkRegister chunkRegister = this.chunks.get(chunkUUID);
             if (!chunkRegister.getChunk().isLoaded()) {
                 chunkRegister.unload(false, null);
                 this.chunks.remove(chunkUUID);
             }
         }
-
-        return this.chunks.size() == 0;
+        return this.chunks.isEmpty();
     }
 
     public void clearChunks() {
@@ -214,5 +216,19 @@ public class RegionRegister implements CoruptedDataFallback {
     @Override
     public CompoundTag getCoruptedDataCompoundTag() {
         return this.regionTag;
+    }
+
+    @Override
+    public String getWorldName() {
+        return this.register.getWorldInstance().getName();
+    }
+
+    @Override
+    public String toString() {
+        return "RegionRegister{" +
+                "x: " + this.uuid.getX() +
+                ", y: " + this.uuid.getZ() +
+                ", w: " + this.register.getWorldInstance().getName() +
+                "}";
     }
 }

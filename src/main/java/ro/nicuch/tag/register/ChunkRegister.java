@@ -1,6 +1,5 @@
 package ro.nicuch.tag.register;
 
-import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
@@ -16,11 +15,13 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class ChunkRegister {
     private final RegionRegister register;
     private final Chunk chunk;
-    private final LockFreeMap<BlockUUID, CompoundTag> blocks = LockFreeMap.newMap(1);
+    private final ConcurrentMap<BlockUUID, CompoundTag> blocks = new ConcurrentHashMap<>();
     private final Set<UUID> entities = new HashSet<>();
     private final CompoundTag chunkTag;
 
@@ -103,19 +104,24 @@ public class ChunkRegister {
         }
         CompoundTag blocks = new CompoundTag();
         for (BlockUUID blockUUID : this.blocks.keySet()) {
-            blocks.put(blockUUID.toString(), this.blocks.getUnsafe(blockUUID));
+            blocks.put(blockUUID.toString(), this.blocks.get(blockUUID));
         }
-        this.chunkTag.put("entities", entities);
-        this.chunkTag.put("blocks", blocks);
-        this.register.getRegionTag().put(this.uuid.toString(), this.chunkTag);
+        if (!entities.isEmpty())
+            this.chunkTag.put("entities", entities);
+        if (!blocks.isEmpty())
+            this.chunkTag.put("blocks", blocks);
+        if (!this.chunkTag.isEmpty())
+            this.register.getRegionTag().put(this.uuid.toString(), this.chunkTag);
     }
 
     public boolean isBlockStored(Block block) {
-        return this.blocks.containsKey(BlockUUID.fromBlock(block));
+        BlockUUID blockUUID = BlockUUID.fromBlock(block);
+        return this.blocks.containsKey(blockUUID);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        return this.blocks.get(BlockUUID.fromBlock(block));
+        BlockUUID blockUUID = BlockUUID.fromBlock(block);
+        return Optional.ofNullable(this.blocks.get(blockUUID));
     }
 
     public CompoundTag createStoredBlock(Block block) {
@@ -159,5 +165,14 @@ public class ChunkRegister {
 
     public CompoundTag getChunkTag() {
         return this.chunkTag;
+    }
+
+    @Override
+    public String toString() {
+        return "ChunkRegister{" +
+                "x: " + this.uuid.getX() +
+                ", y: " + this.uuid.getZ() +
+                ", w: " + this.register.getWorldRegister().getWorldInstance().getName() +
+                "}";
     }
 }

@@ -93,6 +93,11 @@ public class PlayerRegister implements CoruptedDataFallback {
         return this.playerTag;
     }
 
+    @Override
+    public String getWorldName() {
+        return null; //Players don't need a world
+    }
+
     public UUID getPlayerUUID() {
         return this.uuid;
     }

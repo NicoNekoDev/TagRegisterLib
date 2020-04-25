@@ -1,14 +1,15 @@
 package ro.nicuch.tag.fallback;
 
-import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 
 import java.io.File;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class CoruptedDataManager {
-    private final static LockFreeMap<String, CoruptedDataBackup> coruptedData = LockFreeMap.newMap(1);
+    private final static ConcurrentMap<String, CoruptedDataBackup> coruptedData = new ConcurrentHashMap<>();
     private static CoruptedDataListener coruptedListener;
 
     public static boolean reportErrors() {
@@ -16,7 +17,7 @@ public class CoruptedDataManager {
     }
 
     public static void fallbackOperation(CoruptedDataFallback fallback) {
-        CoruptedDataBackup backup = new CoruptedDataBackup(fallback.getCoruptedDataId(), fallback.getCoruptedDataFile(), fallback.getCoruptedDataCompoundTag());
+        CoruptedDataBackup backup = new CoruptedDataBackup(fallback.getCoruptedDataId(), fallback.getCoruptedDataFile(), fallback.getCoruptedDataCompoundTag(), fallback.getWorldName());
         coruptedData.put(fallback.getCoruptedDataId(), backup);
         if (coruptedListener == null) {
             Bukkit.getPluginManager().registerEvents(new CoruptedDataListener(), Bukkit.getPluginManager().getPlugin("TagRegisterLib"));

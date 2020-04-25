@@ -1,6 +1,5 @@
 package ro.nicuch.tag;
 
-import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
@@ -13,22 +12,35 @@ import ro.nicuch.tag.register.WorldRegister;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 
 public class TagRegister {
-    private final static LockFreeMap<String, WorldRegister> worlds = LockFreeMap.newMap(1);
-    private final static LockFreeMap<UUID, PlayerRegister> players = LockFreeMap.newMap(1);
+
+    private static boolean debug;
+
+    public static boolean isDebugging() {
+        return debug;
+    }
+
+    public static void toggleDebug() {
+        debug = !debug;
+    }
+
+    private final static ConcurrentMap<String, WorldRegister> worlds = new ConcurrentHashMap<>();
+    private final static ConcurrentMap<UUID, PlayerRegister> players = new ConcurrentHashMap<>();
 
     public static Optional<PlayerRegister> getPlayerRegister(UUID uuid) {
         if (players.containsKey(uuid))
-            return players.get(uuid);
+            return Optional.ofNullable(players.get(uuid));
         PlayerRegister playerRegister = new PlayerRegister(uuid);
         players.put(uuid, playerRegister);
         return Optional.of(playerRegister);
     }
 
     public static Optional<CompoundTag> getPlayerTag(UUID uuid) {
-        return Optional.ofNullable(players.getUnsafe(uuid).getPlayerTag());
+        return Optional.ofNullable(players.get(uuid).getPlayerTag());
     }
 
     public static boolean isPlayerStored(UUID uuid) {
@@ -80,11 +92,11 @@ public class TagRegister {
     }
 
     public static WorldRegister unloadWorld(World world) {
-        return worlds.removeAndReturn(world.getName());
+        return worlds.remove(world.getName());
     }
 
     public static Optional<WorldRegister> getWorld(World world) {
-        return worlds.get(world.getName());
+        return Optional.ofNullable(worlds.get(world.getName()));
     }
 
     public static void tryUnloading() {
@@ -94,7 +106,7 @@ public class TagRegister {
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
             if (offlinePlayer.isOnline())
                 continue;
-            PlayerRegister playerRegister = players.getUnsafe(uuid);
+            PlayerRegister playerRegister = players.get(uuid);
             players.remove(uuid);
             playerRegister.writePlayerFile();
         }

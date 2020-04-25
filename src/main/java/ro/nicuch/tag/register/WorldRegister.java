@@ -1,6 +1,5 @@
 package ro.nicuch.tag.register;
 
-import com.mfk.lockfree.map.LockFreeMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
@@ -18,15 +17,20 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class WorldRegister implements CoruptedDataFallback {
     private CompoundTag worldTag;
     private final File worldFile;
     private final File worldDataFolder;
     private final World world;
-    private final LockFreeMap<RegionUUID, RegionRegister> regions = LockFreeMap.newMap(1);
-    private final LockFreeMap<UUID, CompoundTag> entities = LockFreeMap.newMap(1);
+    private final ConcurrentMap<RegionUUID, RegionRegister> regions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>();
 
     public WorldRegister(World world) {
         this.world = world;
@@ -34,17 +38,17 @@ public class WorldRegister implements CoruptedDataFallback {
         this.worldDataFolder.mkdirs();
         this.worldFile = new File(world.getWorldFolder().getPath() + File.separator + "tag_level.dat");
         if (!this.worldFile.exists()) {
-            try {
-                this.worldFile.createNewFile();
-                this.worldFile.setReadable(true, false);
-                this.worldFile.setWritable(true, false);
-                this.worldTag = new CompoundTag();
-                this.writeWorldFile();
-            } catch (IOException e) {
+            this.worldTag = new CompoundTag();
+        } else {
+            try (FileInputStream fileInputStream = new FileInputStream(this.worldFile)) {
+                this.worldTag = TagIO.readInputStream(fileInputStream);
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+                System.out.println("(Reading) " + this.world.getName() + "'s level file is corupted.");
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-        this.readWorldFile();
         Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
                 Bukkit.getPluginManager().callEvent(new WorldTagLoadEvent(this, this.worldTag)));
     }
@@ -53,18 +57,16 @@ public class WorldRegister implements CoruptedDataFallback {
         return this.worldDataFolder;
     }
 
-    public void readWorldFile() {
-        try (FileInputStream fileInputStream = new FileInputStream(this.worldFile)) {
-            this.worldTag = TagIO.readInputStream(fileInputStream);
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-            System.out.println("(Reading) " + this.world.getName() + "'s level file is corupted.");
-        } catch (Exception e) {
+    protected void writeWorldFile() {
+        if (this.worldTag.isEmpty())
+            return;
+        try {
+            this.worldFile.createNewFile();
+            this.worldFile.setReadable(true, false);
+            this.worldFile.setWritable(true, false);
+        } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    public void writeWorldFile() {
         try (FileOutputStream fileOutputStream = new FileOutputStream(this.worldFile)) {
             TagIO.writeOutputStream(this.worldTag, fileOutputStream);
         } catch (IOException ioe) {
@@ -93,7 +95,7 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public Optional<RegionRegister> getRegion(Chunk chunk) {
-        return this.regions.get(RegionUUID.fromChunk(chunk));
+        return Optional.ofNullable(this.regions.get(RegionUUID.fromChunk(chunk)));
     }
 
     public CompoundTag loadEntity(UUID uuid, CompoundTag tag) {
@@ -110,17 +112,17 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public CompoundTag unloadEntity(UUID uuid) {
-        return this.entities.removeAndReturn(uuid);
+        return this.entities.remove(uuid);
     }
 
     public Optional<CompoundTag> getStoredEntity(UUID uuid) {
-        return this.entities.get(uuid);
+        return Optional.ofNullable(this.entities.get(uuid));
     }
 
     public void tryUnloading() {
 
         for (RegionUUID regionUUID : this.regions.keySet()) {
-            RegionRegister regionRegister = this.regions.getUnsafe(regionUUID);
+            RegionRegister regionRegister = this.regions.get(regionUUID);
             if (regionRegister.canBeUnloaded()) {
                 regionRegister.writeRegionFile();
                 regionRegister.clearChunks();
@@ -197,7 +199,19 @@ public class WorldRegister implements CoruptedDataFallback {
         return this.worldTag;
     }
 
+    @Override
+    public String getWorldName() {
+        return this.world.getName();
+    }
+
     public World getWorldInstance() {
         return this.world;
+    }
+
+    @Override
+    public String toString() {
+        return "WorldRegister{" +
+                "w: " + this.world.getName() +
+                "}";
     }
 }

@@ -17,13 +17,14 @@ public class CoruptedDataListener implements Listener {
             return;
         player.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "!!!============================================!!!");
         player.sendMessage("");
-        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Corupted data present! Fallback backup was activated!");
-        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> If you don''t know what this is, please contact the server owner immediately!");
-        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> This can cause bugs and unexpected crashes!");
+        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Corupted data present! Fallback data was activated!");
+        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> If you don't know what this is, please contact the server owner immediately!");
+        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> This can cause bugs and data loss!");
         player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Type [ /trl_backup ] to backup corupted data!");
+        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Type [ /trl_debug ] to start debugging!");
         player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Type [ /trl_overwrite ] to overwrite corupted data! [DANGEROUS]");
         player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Type [ /trl_reset ] to remove corupted data! [DANGEROUS]");
-        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Be aware that this commands may not work if the server don''t have enough space on disk!");
+        player.sendMessage(ChatColor.RED + "" + ChatColor.BOLD + "> Be aware that this commands may not work if the server don't have enough space on disk!");
         player.sendMessage("");
         player.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "!!!============================================!!!");
     }

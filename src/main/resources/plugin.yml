@@ -10,3 +10,5 @@ commands:
     description: Overwrite the corupted data.
   trl_reset:
     description: Reset the corupted data.
+  trl_debug:
+    description: Debugs the plugin.
