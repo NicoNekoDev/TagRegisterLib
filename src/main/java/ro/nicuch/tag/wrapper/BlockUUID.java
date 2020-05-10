@@ -1,6 +1,5 @@
 package ro.nicuch.tag.wrapper;
 
-import org.bukkit.Location;
 import org.bukkit.block.Block;
 
 import java.util.Objects;
@@ -12,12 +11,16 @@ public class BlockUUID {
     private final int y;
     private final int z;
 
-    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
+    private final static Pattern pattern = Pattern.compile("x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)");
 
     public BlockUUID(final int x, final int y, final int z) {
         this.x = x;
         this.y = y;
         this.z = z;
+    }
+
+    public BlockUUID(final Block block) {
+        this(block.getX(), block.getY(), block.getZ());
     }
 
     public final int getX() {
@@ -32,9 +35,6 @@ public class BlockUUID {
         return this.z;
     }
 
-    public static BlockUUID fromBlock(Block block) {
-        return new BlockUUID(block.getX(), block.getY(), block.getZ());
-    }
 
     public static BlockUUID fromString(String id) {
         try {
@@ -54,17 +54,17 @@ public class BlockUUID {
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof BlockUUID)) return false;
-        BlockUUID blockUUID = (BlockUUID) obj;
-        return x == blockUUID.getX() && z == blockUUID.getZ();
+        BlockUUID that = (BlockUUID) obj;
+        return this.x == that.x && this.y == that.y && this.z == that.z;
     }
 
     @Override
     public String toString() {
-        return "<x" + x + ",y" + y + ",z" + z + ">";
+        return "x" + x + ",y" + y + ",z" + z + "";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, y, z, this.toString());
+        return Objects.hash(x, z);
     }
 }

@@ -4,21 +4,22 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.lwjnbtl.CompoundTag;
-import ro.nicuch.lwjnbtl.TagType;
 import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.ChunkTagLoadEvent;
+import ro.nicuch.tag.nbt.BlockCompoundTag;
+import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 public class ChunkRegister {
     private final RegionRegister register;
     private final Chunk chunk;
-    private final ConcurrentMap<BlockUUID, CompoundTag> blocks = new ConcurrentHashMap<>();
+    private final BlockCompoundTag blocks;
     private final Set<UUID> entities = new HashSet<>();
     private final CompoundTag chunkTag;
 
@@ -29,36 +30,31 @@ public class ChunkRegister {
     }
 
     public ChunkRegister(RegionRegister register, Chunk chunk) {
-        this.uuid = new ChunkUUID(chunk);
-
+        this.uuid = new ChunkUUID(chunk.getX(), chunk.getZ());
         this.register = register;
         this.chunk = chunk;
         CompoundTag regionTag = register.getRegionTag();
         String chunkID = this.uuid.toString();
-        if (regionTag.contains(chunkID, TagType.COMPOUND))
-            this.chunkTag = (CompoundTag) regionTag.get(chunkID);
+        if (regionTag.containsCompound(chunkID))
+            this.chunkTag = regionTag.getCompound(chunkID);
         else {
             this.chunkTag = new CompoundTag();
         }
         CompoundTag entities;
-        if (this.chunkTag.contains("entities", TagType.COMPOUND))
+        if (this.chunkTag.containsCompound("entities"))
             entities = this.chunkTag.getCompound("entities");
         else {
             entities = new CompoundTag();
         }
-        CompoundTag blocks;
-        if (this.chunkTag.contains("blocks", TagType.COMPOUND))
-            blocks = this.chunkTag.getCompound("blocks");
+        if (this.chunkTag.containsBlockCompound("blocks"))
+            blocks = this.chunkTag.getBlockCompound("blocks");
         else {
-            blocks = new CompoundTag();
+            blocks = new BlockCompoundTag();
         }
         for (String entityID : entities.keySet()) {
             UUID entityUUID = UUID.fromString(entityID);
             register.getWorldRegister().loadEntity(entityUUID, entities.getCompound(entityID));
             this.entities.add(entityUUID);
-        }
-        for (String blockID : blocks.keySet()) {
-            this.blocks.put(BlockUUID.fromString(blockID), blocks.getCompound(blockID));
         }
         Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
                 Bukkit.getPluginManager().callEvent(new ChunkTagLoadEvent(this, this.chunkTag)));
@@ -98,17 +94,14 @@ public class ChunkRegister {
                 }
             }
         }
-        CompoundTag blocks = new CompoundTag();
-        for (Map.Entry<BlockUUID, CompoundTag> blockEntry : this.blocks.entrySet()) {
-            if (!blockEntry.getValue().isEmpty())
-                blocks.put(blockEntry.getKey().toString(), blockEntry.getValue());
-        }
         if (!entities.isEmpty())
             this.chunkTag.put("entities", entities);
         else if (this.chunkTag.containsCompound("entities"))
             this.chunkTag.remove("entities");
-        if (!blocks.isEmpty())
-            this.chunkTag.put("blocks", blocks);
+        if (!this.blocks.isEmpty())
+            this.blocks.values().removeIf(CompoundTag::isEmpty);
+        if (!this.blocks.isEmpty())
+            this.chunkTag.put("blocks", this.blocks);
         else if (this.chunkTag.containsCompound("blocks"))
             this.chunkTag.remove("blocks");
         CompoundTag regionTag = this.register.getRegionTag();
@@ -120,17 +113,17 @@ public class ChunkRegister {
     }
 
     public boolean isBlockStored(Block block) {
-        BlockUUID blockUUID = BlockUUID.fromBlock(block);
-        return this.blocks.containsKey(blockUUID);
+        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
+        return this.blocks.contains(blockUUID);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        BlockUUID blockUUID = BlockUUID.fromBlock(block);
+        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
         return Optional.ofNullable(this.blocks.get(blockUUID));
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        BlockUUID blockUUID = BlockUUID.fromBlock(block);
+        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
         CompoundTag tag = new CompoundTag();
         this.blocks.put(blockUUID, tag);
         return tag;

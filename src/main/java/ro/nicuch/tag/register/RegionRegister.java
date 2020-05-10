@@ -4,23 +4,18 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.lwjnbtl.CompoundTag;
-import ro.nicuch.lwjnbtl.TagIO;
 import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.RegionTagLoadEvent;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
+import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -51,8 +46,8 @@ public class RegionRegister implements CoruptedDataFallback {
         if (!this.regionFile.exists()) {
             this.regionTag = new CompoundTag();
         } else {
-            try (FileInputStream fileInputStream = new FileInputStream(this.regionFile)) {
-                this.regionTag = TagIO.readInputStream(fileInputStream);
+            try {
+                this.regionTag = TagIO.readFile(this.regionFile);
             } catch (IOException | NullPointerException ioe) {
                 ioe.printStackTrace();
                 System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");
@@ -93,8 +88,8 @@ public class RegionRegister implements CoruptedDataFallback {
                 e.printStackTrace();
             }
         }
-        try (FileOutputStream fileOutputStream = new FileOutputStream(this.regionFile)) {
-            TagIO.writeOutputStream(this.regionTag, fileOutputStream);
+        try {
+            TagIO.writeFile(this.regionTag, this.regionFile);
         } catch (IOException | NullPointerException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) This region file is corupted. -> r." + x + "." + z + ".dat");
@@ -103,12 +98,12 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean isChunkNotLoaded(Chunk chunk) {
-        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
         return !this.chunks.containsKey(chunkUUID);
     }
 
     public boolean isChunkNotLoaded(ChunkUUID chunkUUID) {
-        return this.chunks.containsKey(chunkUUID);
+        return !this.chunks.containsKey(chunkUUID);
     }
 
     public ChunkRegister loadChunk(Chunk chunk) {
@@ -118,7 +113,7 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public Optional<ChunkRegister> getChunk(Chunk chunk) {
-        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
         return Optional.ofNullable(this.chunks.get(chunkUUID));
     }
 
@@ -127,7 +122,7 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public ChunkRegister removeChunk(Chunk chunk) {
-        ChunkUUID chunkUUID = ChunkUUID.fromChunk(chunk);
+        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
         return this.chunks.remove(chunkUUID);
     }
 
@@ -142,18 +137,16 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean canBeUnloaded() {
-        for (ChunkUUID chunkUUID : this.chunks.keySet()) {
-            ChunkRegister chunkRegister = this.chunks.get(chunkUUID);
+        Iterator<Map.Entry<ChunkUUID, ChunkRegister>> chunkIterator = this.chunks.entrySet().iterator();
+        while (chunkIterator.hasNext()) {
+            Map.Entry<ChunkUUID, ChunkRegister> chunkEntry = chunkIterator.next();
+            ChunkRegister chunkRegister = chunkEntry.getValue();
             if (!chunkRegister.getChunk().isLoaded()) {
                 chunkRegister.unload(false, null);
-                this.chunks.remove(chunkUUID);
+                chunkIterator.remove();
             }
         }
         return this.chunks.isEmpty();
-    }
-
-    public void clearChunks() {
-        this.chunks.clear();
     }
 
     public void saveChunks() {

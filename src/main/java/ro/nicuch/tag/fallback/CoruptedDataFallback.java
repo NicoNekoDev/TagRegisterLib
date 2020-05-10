@@ -1,6 +1,6 @@
 package ro.nicuch.tag.fallback;
 
-import ro.nicuch.lwjnbtl.CompoundTag;
+import ro.nicuch.tag.nbt.CompoundTag;
 
 import java.io.File;
 

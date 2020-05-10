@@ -1,8 +1,8 @@
 package ro.nicuch.tag.fallback;
 
 import org.bukkit.ChatColor;
-import ro.nicuch.lwjnbtl.CompoundTag;
-import ro.nicuch.lwjnbtl.TagIO;
+import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.TagIO;
 
 import java.io.File;
 import java.io.FileOutputStream;

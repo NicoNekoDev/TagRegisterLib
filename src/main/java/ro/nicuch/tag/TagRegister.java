@@ -6,7 +6,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import ro.nicuch.lwjnbtl.CompoundTag;
+import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.register.PlayerRegister;
 import ro.nicuch.tag.register.WorldRegister;
 

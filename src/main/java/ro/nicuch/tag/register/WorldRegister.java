@@ -5,22 +5,17 @@ import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.lwjnbtl.CompoundTag;
-import ro.nicuch.lwjnbtl.TagIO;
 import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.WorldTagLoadEvent;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
+import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -40,8 +35,8 @@ public class WorldRegister implements CoruptedDataFallback {
         if (!this.worldFile.exists()) {
             this.worldTag = new CompoundTag();
         } else {
-            try (FileInputStream fileInputStream = new FileInputStream(this.worldFile)) {
-                this.worldTag = TagIO.readInputStream(fileInputStream);
+            try {
+                this.worldTag = TagIO.readFile(this.worldFile);
             } catch (IOException ioe) {
                 ioe.printStackTrace();
                 System.out.println("(Reading) " + this.world.getName() + "'s level file is corupted.");
@@ -72,8 +67,8 @@ public class WorldRegister implements CoruptedDataFallback {
                 e.printStackTrace();
             }
         }
-        try (FileOutputStream fileOutputStream = new FileOutputStream(this.worldFile)) {
-            TagIO.writeOutputStream(this.worldTag, fileOutputStream);
+        try {
+            TagIO.writeFile(this.worldTag, this.worldFile);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) " + this.world.getName() + "'s level file is corupted.");
@@ -125,16 +120,15 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public void tryUnloading() {
-
-        for (RegionUUID regionUUID : this.regions.keySet()) {
-            RegionRegister regionRegister = this.regions.get(regionUUID);
+        Iterator<Map.Entry<RegionUUID, RegionRegister>> regionIterator = this.regions.entrySet().iterator();
+        while (regionIterator.hasNext()) {
+            Map.Entry<RegionUUID, RegionRegister> regionEntry = regionIterator.next();
+            RegionRegister regionRegister = regionEntry.getValue();
             if (regionRegister.canBeUnloaded()) {
                 regionRegister.writeRegionFile();
-                regionRegister.clearChunks();
-                this.regions.remove(regionUUID);
+                regionIterator.remove();
             }
         }
-
         Set<UUID> worldEntities = new HashSet<>();
         for (Entity entity : this.world.getEntities())
             worldEntities.add(entity.getUniqueId());

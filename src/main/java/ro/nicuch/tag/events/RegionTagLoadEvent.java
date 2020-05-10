@@ -1,6 +1,6 @@
 package ro.nicuch.tag.events;
 
-import ro.nicuch.lwjnbtl.CompoundTag;
+import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.register.RegionRegister;
 
 public class RegionTagLoadEvent extends TagLoadEvent {

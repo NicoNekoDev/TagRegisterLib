@@ -1,14 +1,12 @@
 package ro.nicuch.tag.register;
 
-import ro.nicuch.lwjnbtl.CompoundTag;
-import ro.nicuch.lwjnbtl.TagIO;
 import org.bukkit.Bukkit;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
+import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.TagIO;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -60,8 +58,8 @@ public class PlayerRegister implements CoruptedDataFallback {
     }
 
     public void readPlayerFile() {
-        try (FileInputStream fileInputStream = new FileInputStream(this.playerFile)) {
-            this.playerTag = TagIO.readInputStream(fileInputStream);
+        try {
+            this.playerTag = TagIO.readFile(this.playerFile);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Reading) Player file <" + this.uuid.toString() + ".dat> is corupted!");
@@ -69,8 +67,8 @@ public class PlayerRegister implements CoruptedDataFallback {
     }
 
     public void writePlayerFile() {
-        try (FileOutputStream fileOutputStream = new FileOutputStream(this.playerFile)) {
-            TagIO.writeOutputStream(this.playerTag, fileOutputStream);
+        try {
+            TagIO.writeFile(this.playerTag, this.playerFile);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) Player file <" + this.uuid.toString() + ".dat> is corupted!");

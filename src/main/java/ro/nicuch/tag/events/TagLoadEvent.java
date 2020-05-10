@@ -2,7 +2,7 @@ package ro.nicuch.tag.events;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
-import ro.nicuch.lwjnbtl.CompoundTag;
+import ro.nicuch.tag.nbt.CompoundTag;
 
 public class TagLoadEvent extends Event {
     private final static HandlerList handlers = new HandlerList();

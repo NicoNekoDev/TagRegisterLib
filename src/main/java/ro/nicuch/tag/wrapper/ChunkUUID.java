@@ -1,7 +1,6 @@
 package ro.nicuch.tag.wrapper;
 
 import org.bukkit.Chunk;
-import ro.nicuch.tag.register.ChunkRegister;
 
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -11,19 +10,15 @@ public class ChunkUUID {
     private final int x;
     private final int z;
 
-    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),z([-]?[0-9]+)>");
-
-    public ChunkUUID(final Chunk chunk) {
-        this(chunk.getX(), chunk.getZ());
-    }
-
-    public ChunkUUID(final ChunkRegister register) {
-        this(register.getX(), register.getZ());
-    }
+    private final static Pattern pattern = Pattern.compile("x([-]?[0-9]+),z([-]?[0-9]+)");
 
     public ChunkUUID(final int x, final int z) {
         this.x = x;
         this.z = z;
+    }
+
+    public ChunkUUID(final Chunk chunk) {
+        this(chunk.getX(), chunk.getZ());
     }
 
     public final int getX() {
@@ -34,9 +29,6 @@ public class ChunkUUID {
         return this.z;
     }
 
-    public static ChunkUUID fromChunk(Chunk chunk) {
-        return new ChunkUUID(chunk);
-    }
 
     public static ChunkUUID fromString(String id) {
         try {
@@ -55,17 +47,17 @@ public class ChunkUUID {
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof ChunkUUID)) return false;
-        ChunkUUID chunkUUID = (ChunkUUID) obj;
-        return x == chunkUUID.getX() && z == chunkUUID.getZ();
+        ChunkUUID that = (ChunkUUID) obj;
+        return this.x == that.x && this.z == that.z;
     }
 
     @Override
     public String toString() {
-        return "<x" + x + ",z" + z + ">";
+        return "x" + x + ",z" + z + "";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, z, this.toString());
+        return Objects.hash(x, z);
     }
 }
