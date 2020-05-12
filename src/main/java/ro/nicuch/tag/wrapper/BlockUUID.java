@@ -53,7 +53,10 @@ public class BlockUUID {
 
     @Override
     public boolean equals(Object obj) {
-        if (!(obj instanceof BlockUUID)) return false;
+        if (this != obj)
+            return false;
+        if (!(obj instanceof BlockUUID))
+            return false;
         BlockUUID that = (BlockUUID) obj;
         return this.x == that.x && this.y == that.y && this.z == that.z;
     }

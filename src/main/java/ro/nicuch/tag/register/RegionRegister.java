@@ -10,6 +10,7 @@ import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.nbt.TagIO;
+import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
@@ -47,7 +48,7 @@ public class RegionRegister implements CoruptedDataFallback {
             this.regionTag = new CompoundTag();
         } else {
             try {
-                this.regionTag = TagIO.readFile(this.regionFile);
+                this.regionTag = (CompoundTag) TagIO.readFile(this.regionFile, TagType.COMPOUND);
             } catch (IOException | NullPointerException ioe) {
                 ioe.printStackTrace();
                 System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");

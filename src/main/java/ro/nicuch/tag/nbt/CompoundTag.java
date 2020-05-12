@@ -1,5 +1,8 @@
 package ro.nicuch.tag.nbt;
 
+import ro.nicuch.tag.nbt.reg.ChunkCompoundTag;
+import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -9,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiConsumer;
 
 /**
  * A compound tag.
@@ -535,7 +539,7 @@ public final class CompoundTag implements CollectionTag {
      * @param key   the key
      * @param value the value
      */
-    public BlockCompoundTag putBlockCompound(final String key, final BlockCompoundTag value) {
+    public ChunkCompoundTag putRegionCompound(final String key, final ChunkCompoundTag value) {
         this.tags.put(key, value);
         return value;
     }
@@ -548,9 +552,9 @@ public final class CompoundTag implements CollectionTag {
      * @return the compound, or {@code defaultValue} if this compound does not contain a compound tag
      * with the specified key, or has a tag with a different type
      */
-    public BlockCompoundTag getBlockCompound(final String key, final BlockCompoundTag defaultValue) {
-        if (this.contains(key, TagType.BLOCK_COMPOUND)) {
-            return (BlockCompoundTag) this.tags.get(key);
+    public ChunkCompoundTag getRegionCompound(final String key, final ChunkCompoundTag defaultValue) {
+        if (this.contains(key, TagType.REGION_COMPOUND)) {
+            return (ChunkCompoundTag) this.tags.get(key);
         }
         return defaultValue;
     }
@@ -562,11 +566,11 @@ public final class CompoundTag implements CollectionTag {
      * @return the compound, or a new compound if this compound does not contain a compound tag
      * with the specified key, or has a tag with a different type
      */
-    public BlockCompoundTag getBlockCompound(final String key) {
-        if (this.contains(key, TagType.BLOCK_COMPOUND)) {
-            return (BlockCompoundTag) this.tags.get(key);
+    public ChunkCompoundTag getRegionCompound(final String key) {
+        if (this.contains(key, TagType.REGION_COMPOUND)) {
+            return (ChunkCompoundTag) this.tags.get(key);
         }
-        return new BlockCompoundTag();
+        return new ChunkCompoundTag();
     }
 
     /**
@@ -577,9 +581,9 @@ public final class CompoundTag implements CollectionTag {
      * @return the compound, or {@code defaultValue} if this compound does not contain a compound tag
      * with the specified key, or has a tag with a different type
      */
-    public ChunkCompoundTag getChunkCompound(final String key, final ChunkCompoundTag defaultValue) {
+    public RegionCompoundTag getChunkCompound(final String key, final RegionCompoundTag defaultValue) {
         if (this.contains(key, TagType.CHUNK_COMPOUND)) {
-            return (ChunkCompoundTag) this.tags.get(key);
+            return (RegionCompoundTag) this.tags.get(key);
         }
         return defaultValue;
     }
@@ -591,11 +595,11 @@ public final class CompoundTag implements CollectionTag {
      * @return the compound, or a new compound if this compound does not contain a compound tag
      * with the specified key, or has a tag with a different type
      */
-    public ChunkCompoundTag getChunkCompound(final String key) {
+    public RegionCompoundTag getChunkCompound(final String key) {
         if (this.contains(key, TagType.CHUNK_COMPOUND)) {
-            return (ChunkCompoundTag) this.tags.get(key);
+            return (RegionCompoundTag) this.tags.get(key);
         }
-        return new ChunkCompoundTag();
+        return new RegionCompoundTag();
     }
 
     /**
@@ -852,8 +856,8 @@ public final class CompoundTag implements CollectionTag {
      * @param key the key
      * @return {@code true} if this compound has a compound tag with the specified key
      */
-    public boolean containsBlockCompound(final String key) {
-        return this.contains(key, TagType.BLOCK_COMPOUND);
+    public boolean containsRegionCompound(final String key) {
+        return this.contains(key, TagType.REGION_COMPOUND);
     }
 
     /**
@@ -966,7 +970,6 @@ public final class CompoundTag implements CollectionTag {
         if (depth > MAX_DEPTH) {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         }
-
         TagType type;
         while ((type = TagType.of(input.readByte())) != TagType.END) {
             final String key = input.readUTF();
@@ -978,15 +981,18 @@ public final class CompoundTag implements CollectionTag {
 
     @Override
     public void write(final DataOutput output) throws IOException {
-        for (final String key : this.tags.keySet()) {
-            final Tag tag = this.tags.get(key);
+        for (Map.Entry<String, Tag> tagsEntry : this.tags.entrySet()) {
+            final Tag tag = tagsEntry.getValue();
+            if (tag instanceof CollectionTag)
+                if (((CollectionTag) tag).isEmpty())
+                    continue; //skip empty collection tags
+            final String key = tagsEntry.getKey();
             output.writeByte(tag.type().id());
             if (tag.type() != TagType.END) {
                 output.writeUTF(key);
                 tag.write(output);
             }
         }
-        output.writeByte(TagType.END.id());
     }
 
     @Override
@@ -999,6 +1005,16 @@ public final class CompoundTag implements CollectionTag {
         final CompoundTag copy = new CompoundTag();
         this.tags.forEach((key, value) -> copy.put(key, value.copy()));
         return copy;
+    }
+
+    public void forEach(BiConsumer<? super String, ? super Tag> action) {
+        for (Map.Entry<String, Tag> entry : this.tags.entrySet()) {
+            action.accept(entry.getKey(), entry.getValue());
+        }
+    }
+
+    public void copyFrom(CompoundTag from) {
+        from.forEach((key, value) -> this.tags.put(key, value.copy()));
     }
 
     @Override

@@ -1,7 +1,9 @@
-package ro.nicuch.tag.nbt;
+package ro.nicuch.tag.nbt.reg;
 
-
-import ro.nicuch.tag.wrapper.BlockUUID;
+import ro.nicuch.tag.nbt.CollectionTag;
+import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.TagType;
+import ro.nicuch.tag.wrapper.ChunkUUID;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -15,7 +17,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * A compound tag.
  */
-public final class BlockCompoundTag implements CollectionTag {
+public final class RegionCompoundTag implements CollectionTag {
     /**
      * The maximum depth.
      */
@@ -23,13 +25,13 @@ public final class BlockCompoundTag implements CollectionTag {
     /**
      * The map of tags.
      */
-    private final ConcurrentMap<BlockUUID, CompoundTag> tags = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ChunkUUID, ChunkCompoundTag> chunks = new ConcurrentHashMap<>();
 
     /**
      * Clear the tag.
      */
-    public void clear() {
-        tags.clear();
+    public void clearChunks() {
+        chunks.clear();
     }
 
     /**
@@ -38,8 +40,8 @@ public final class BlockCompoundTag implements CollectionTag {
      * @param key the key
      * @return the tag, or {@code null}
      */
-    public CompoundTag get(final BlockUUID key) {
-        return this.tags.get(key);
+    public ChunkCompoundTag getChunkCompound(final ChunkUUID key) {
+        return this.chunks.get(key);
     }
 
     /**
@@ -48,8 +50,8 @@ public final class BlockCompoundTag implements CollectionTag {
      * @param key the key
      * @param tag the tag
      */
-    public CompoundTag put(final BlockUUID key, final CompoundTag tag) {
-        return this.tags.put(key, tag);
+    public ChunkCompoundTag putChunkCompound(final ChunkUUID key, final ChunkCompoundTag tag) {
+        return this.chunks.put(key, tag);
     }
 
     /**
@@ -57,8 +59,8 @@ public final class BlockCompoundTag implements CollectionTag {
      *
      * @param key the key
      */
-    public void remove(final BlockUUID key) {
-        this.tags.remove(key);
+    public ChunkCompoundTag removeChunkCompound(final ChunkUUID key) {
+        return this.chunks.remove(key);
     }
 
     /**
@@ -67,7 +69,7 @@ public final class BlockCompoundTag implements CollectionTag {
      * @param key the key
      * @return {@code true} if this compound has a tag with the specified key
      */
-    public boolean contains(final BlockUUID key) {
+    public boolean contains(final ChunkUUID key) {
         return this.tags.containsKey(key);
     }
 
@@ -86,11 +88,11 @@ public final class BlockCompoundTag implements CollectionTag {
      *
      * @return a set of keys
      */
-    public Set<BlockUUID> keySet() {
+    public Set<ChunkUUID> keySet() {
         return this.tags.keySet();
     }
 
-    public Set<Map.Entry<BlockUUID, CompoundTag>> entrySet() {
+    public Set<Map.Entry<ChunkUUID, CompoundTag>> entrySet() {
         return this.tags.entrySet();
     }
 
@@ -105,9 +107,8 @@ public final class BlockCompoundTag implements CollectionTag {
         }
         while (input.readByte() == (byte) 1) {
             final int x = input.readInt();
-            final int y = input.readInt();
             final int z = input.readInt();
-            final BlockUUID key = new BlockUUID(x, y, z);
+            final ChunkUUID key = new ChunkUUID(x, z);
             final CompoundTag tag = new CompoundTag();
             tag.read(input, depth + 1);
             this.tags.put(key, tag);
@@ -116,11 +117,10 @@ public final class BlockCompoundTag implements CollectionTag {
 
     @Override
     public void write(final DataOutput output) throws IOException {
-        for (final BlockUUID key : this.tags.keySet()) {
+        for (final ChunkUUID key : this.tags.keySet()) {
             CompoundTag tag = this.tags.get(key);
             output.writeByte((byte) 1);
             output.writeInt(key.getX());
-            output.writeInt(key.getY());
             output.writeInt(key.getZ());
             tag.write(output);
         }
@@ -129,12 +129,12 @@ public final class BlockCompoundTag implements CollectionTag {
 
     @Override
     public TagType type() {
-        return TagType.BLOCK_COMPOUND;
+        return TagType.CHUNK_COMPOUND;
     }
 
     @Override
-    public BlockCompoundTag copy() {
-        final BlockCompoundTag copy = new BlockCompoundTag();
+    public RegionCompoundTag copy() {
+        final RegionCompoundTag copy = new RegionCompoundTag();
         this.tags.forEach((key, value) -> copy.put(key, value.copy()));
         return copy;
     }
@@ -146,7 +146,7 @@ public final class BlockCompoundTag implements CollectionTag {
 
     @Override
     public boolean equals(final Object that) {
-        return this == that || (that instanceof BlockCompoundTag && this.tags.equals(((BlockCompoundTag) that).tags));
+        return this == that || (that instanceof RegionCompoundTag && this.tags.equals(((RegionCompoundTag) that).tags));
     }
 }
 

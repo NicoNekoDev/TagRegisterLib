@@ -11,6 +11,7 @@ import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.nbt.TagIO;
+import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
 import java.io.File;
@@ -36,7 +37,7 @@ public class WorldRegister implements CoruptedDataFallback {
             this.worldTag = new CompoundTag();
         } else {
             try {
-                this.worldTag = TagIO.readFile(this.worldFile);
+                this.worldTag = (CompoundTag) TagIO.readFile(this.worldFile, TagType.COMPOUND);
             } catch (IOException ioe) {
                 ioe.printStackTrace();
                 System.out.println("(Reading) " + this.world.getName() + "'s level file is corupted.");

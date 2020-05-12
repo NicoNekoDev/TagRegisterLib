@@ -1,5 +1,8 @@
 package ro.nicuch.tag.nbt;
 
+import ro.nicuch.tag.nbt.reg.ChunkCompoundTag;
+import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
+
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -68,9 +71,9 @@ public enum TagType implements Predicate<TagType> {
      */
     BIG_INT((byte) 14, BigIntegerTag::new),
 
-    BLOCK_COMPOUND((byte) 15, BlockCompoundTag::new),
+    CHUNK_COMPOUND((byte) 15, ChunkCompoundTag::new),
 
-    CHUNK_COMPOUND((byte) 16, ChunkCompoundTag::new);
+    REGION_COMPOUND((byte) 16, RegionCompoundTag::new);
 
     private static final TagType[] TYPES = values();
     /**

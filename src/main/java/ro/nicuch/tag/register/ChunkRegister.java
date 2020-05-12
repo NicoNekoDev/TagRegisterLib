@@ -6,7 +6,7 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import ro.nicuch.tag.TagRegister;
 import ro.nicuch.tag.events.ChunkTagLoadEvent;
-import ro.nicuch.tag.nbt.BlockCompoundTag;
+import ro.nicuch.tag.nbt.reg.ChunkCompoundTag;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
@@ -19,7 +19,7 @@ import java.util.UUID;
 public class ChunkRegister {
     private final RegionRegister register;
     private final Chunk chunk;
-    private final BlockCompoundTag blocks;
+    private final ChunkCompoundTag blocks;
     private final Set<UUID> entities = new HashSet<>();
     private final CompoundTag chunkTag;
 
@@ -49,7 +49,7 @@ public class ChunkRegister {
         if (this.chunkTag.containsBlockCompound("blocks"))
             blocks = this.chunkTag.getBlockCompound("blocks");
         else {
-            blocks = new BlockCompoundTag();
+            blocks = new ChunkCompoundTag();
         }
         for (String entityID : entities.keySet()) {
             UUID entityUUID = UUID.fromString(entityID);

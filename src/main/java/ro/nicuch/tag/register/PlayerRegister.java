@@ -5,6 +5,7 @@ import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.nbt.TagIO;
+import ro.nicuch.tag.nbt.TagType;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,7 +60,7 @@ public class PlayerRegister implements CoruptedDataFallback {
 
     public void readPlayerFile() {
         try {
-            this.playerTag = TagIO.readFile(this.playerFile);
+            this.playerTag = (CompoundTag) TagIO.readFile(this.playerFile, TagType.COMPOUND);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Reading) Player file <" + this.uuid.toString() + ".dat> is corupted!");
