@@ -50,8 +50,8 @@ public class RegionUUID {
 
     @Override
     public boolean equals(Object obj) {
-        if (this != obj)
-            return false;
+        if (this == obj)
+            return true;
         if (!(obj instanceof RegionUUID))
             return false;
         RegionUUID regionUUID = (RegionUUID) obj;

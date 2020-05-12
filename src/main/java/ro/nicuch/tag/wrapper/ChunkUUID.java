@@ -46,8 +46,8 @@ public class ChunkUUID {
 
     @Override
     public boolean equals(Object obj) {
-        if (this != obj)
-            return false;
+        if (this == obj)
+            return true;
         if (!(obj instanceof ChunkUUID))
             return false;
         ChunkUUID that = (ChunkUUID) obj;

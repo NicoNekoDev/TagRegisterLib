@@ -260,8 +260,8 @@ public final class ChunkCompoundTag implements Tag {
 
     @Override
     public boolean equals(Object obj) {
-        if (this != obj)
-            return false;
+        if (this == obj)
+            return true;
         if (!(obj instanceof ChunkCompoundTag))
             return false;
         ChunkCompoundTag that = (ChunkCompoundTag) obj;
