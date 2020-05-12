@@ -1,19 +1,18 @@
 package ro.nicuch.tag.fallback;
 
 import org.bukkit.ChatColor;
-import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagIO;
 
 import java.io.File;
-import java.io.FileOutputStream;
 
 public class CoruptedDataBackup {
     private final String coruptedDataId;
     private final File fileToWrite;
-    private final CompoundTag compoundTagToWrite;
+    private final Tag compoundTagToWrite;
     private final String world;
 
-    protected CoruptedDataBackup(final String coruptedDataId, final File fileToWrite, final CompoundTag compoundTagToWrite, String world) {
+    protected CoruptedDataBackup(final String coruptedDataId, final File fileToWrite, final Tag compoundTagToWrite, String world) {
         this.coruptedDataId = coruptedDataId;
         this.fileToWrite = fileToWrite;
         this.compoundTagToWrite = compoundTagToWrite;
@@ -22,7 +21,7 @@ public class CoruptedDataBackup {
 
     protected String tryToOverWrite() {
         try {
-            TagIO.writeOutputStream(this.compoundTagToWrite, new FileOutputStream(fileToWrite));
+            TagIO.writeFile(this.compoundTagToWrite, fileToWrite);
             return "(Overwrite) File <" + (world == null ? "" : world + "/") + this.coruptedDataId + ".dat> overwrited!";
         } catch (Exception ioe) {
             ioe.printStackTrace();
@@ -32,7 +31,7 @@ public class CoruptedDataBackup {
 
     protected String tryToWriteToBackup(final File directory) {
         try {
-            TagIO.writeOutputStream(this.compoundTagToWrite, new FileOutputStream(new File(directory + File.separator + this.coruptedDataId + ".backup")));
+            TagIO.writeFile(this.compoundTagToWrite, new File(directory + File.separator + this.coruptedDataId + ".backup"));
             return "(Backup) File <" + (world == null ? "" : world + "/") + this.coruptedDataId + ".dat> backup'ed!";
         } catch (Exception ioe) {
             ioe.printStackTrace();

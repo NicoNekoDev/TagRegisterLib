@@ -2,17 +2,17 @@ package ro.nicuch.tag.events;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
-import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 
-public class TagLoadEvent extends Event {
+public class TagLoadEvent<T extends Tag> extends Event {
     private final static HandlerList handlers = new HandlerList();
-    private final CompoundTag tag;
+    private final T tag;
 
-    public TagLoadEvent(CompoundTag tag) {
+    public TagLoadEvent(T tag) {
         this.tag = tag;
     }
 
-    public CompoundTag getCompoundTag() {
+    public T getTag() {
         return this.tag;
     }
 

@@ -993,6 +993,7 @@ public final class CompoundTag implements CollectionTag {
                 tag.write(output);
             }
         }
+        output.writeByte(TagType.END.id());
     }
 
     @Override

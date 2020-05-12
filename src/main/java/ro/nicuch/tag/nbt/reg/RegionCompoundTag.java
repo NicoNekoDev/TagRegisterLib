@@ -1,7 +1,7 @@
 package ro.nicuch.tag.nbt.reg;
 
-import ro.nicuch.tag.nbt.CollectionTag;
 import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
@@ -10,6 +10,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * A compound tag.
  */
-public final class RegionCompoundTag implements CollectionTag {
+public final class RegionCompoundTag implements Tag {
     /**
      * The maximum depth.
      */
@@ -27,10 +28,22 @@ public final class RegionCompoundTag implements CollectionTag {
      */
     private final ConcurrentMap<ChunkUUID, ChunkCompoundTag> chunks = new ConcurrentHashMap<>();
 
+    private final CompoundTag regionTag = new CompoundTag();
+
+    public boolean isEmpty(boolean removeEmpty) {
+        if (removeEmpty)
+            this.chunks.values().removeIf(compound -> compound.isEmpty(false));
+        return this.chunks.isEmpty() && this.regionTag.isEmpty();
+    }
+
+    public CompoundTag getRegionCompound() {
+        return this.regionTag;
+    }
+
     /**
      * Clear the tag.
      */
-    public void clearChunks() {
+    public void clearChunkCompounds() {
         chunks.clear();
     }
 
@@ -69,18 +82,16 @@ public final class RegionCompoundTag implements CollectionTag {
      * @param key the key
      * @return {@code true} if this compound has a tag with the specified key
      */
-    public boolean contains(final ChunkUUID key) {
-        return this.tags.containsKey(key);
+    public boolean containsChunkCompounds(final ChunkUUID key) {
+        return this.chunks.containsKey(key);
     }
 
-    @Override
-    public int size() {
-        return this.tags.size();
+    public int sizeChunkCompounds() {
+        return this.chunks.size();
     }
 
-    @Override
-    public boolean isEmpty() {
-        return this.tags.isEmpty();
+    public boolean isChunkCompoundsEmpty() {
+        return this.chunks.isEmpty();
     }
 
     /**
@@ -88,16 +99,16 @@ public final class RegionCompoundTag implements CollectionTag {
      *
      * @return a set of keys
      */
-    public Set<ChunkUUID> keySet() {
-        return this.tags.keySet();
+    public Set<ChunkUUID> keySetChunkCompounds() {
+        return this.chunks.keySet();
     }
 
-    public Set<Map.Entry<ChunkUUID, CompoundTag>> entrySet() {
-        return this.tags.entrySet();
+    public Set<Map.Entry<ChunkUUID, ChunkCompoundTag>> entrySetChunkCompounds() {
+        return this.chunks.entrySet();
     }
 
-    public Collection<CompoundTag> values() {
-        return this.tags.values();
+    public Collection<ChunkCompoundTag> chunkCompoundsValues() {
+        return this.chunks.values();
     }
 
     @Override
@@ -105,48 +116,66 @@ public final class RegionCompoundTag implements CollectionTag {
         if (depth > MAX_DEPTH) {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         }
-        while (input.readByte() == (byte) 1) {
-            final int x = input.readInt();
-            final int z = input.readInt();
-            final ChunkUUID key = new ChunkUUID(x, z);
-            final CompoundTag tag = new CompoundTag();
-            tag.read(input, depth + 1);
-            this.tags.put(key, tag);
+        byte type;
+        while ((type = input.readByte()) != (byte) 0) {
+            if (type == (byte) 1) {
+                final int x = input.readInt();
+                final int z = input.readInt();
+                final ChunkUUID key = new ChunkUUID(x, z);
+                final ChunkCompoundTag tag = new ChunkCompoundTag();
+                tag.read(input, depth + 1);
+                this.chunks.put(key, tag);
+            } else if (type == (byte) 2) { //last byte
+                this.regionTag.read(input, depth + 1);
+            }
         }
     }
 
     @Override
     public void write(final DataOutput output) throws IOException {
-        for (final ChunkUUID key : this.tags.keySet()) {
-            CompoundTag tag = this.tags.get(key);
+        for (Map.Entry<ChunkUUID, ChunkCompoundTag> chunkCompoundEntry : this.chunks.entrySet()) {
+            final ChunkCompoundTag tag = chunkCompoundEntry.getValue();
+            if (tag.isBlocksEmpty() && tag.isEntitiesEmpty() && tag.getChunkCompound().isEmpty())
+                continue; //skip some bytes
+            final ChunkUUID key = chunkCompoundEntry.getKey();
             output.writeByte((byte) 1);
             output.writeInt(key.getX());
             output.writeInt(key.getZ());
             tag.write(output);
+        }
+        if (!this.regionTag.isEmpty()) {
+            output.writeByte((byte) 2); //write for chunk tag
+            this.regionTag.write(output);
         }
         output.writeByte((byte) 0);
     }
 
     @Override
     public TagType type() {
-        return TagType.CHUNK_COMPOUND;
+        return TagType.REGION_COMPOUND;
     }
 
     @Override
     public RegionCompoundTag copy() {
         final RegionCompoundTag copy = new RegionCompoundTag();
-        this.tags.forEach((key, value) -> copy.put(key, value.copy()));
+        this.chunks.forEach((key, value) -> copy.putChunkCompound(key, value.copy()));
+        copy.getRegionCompound().copyFrom(this.regionTag);
         return copy;
     }
 
     @Override
     public int hashCode() {
-        return this.tags.hashCode();
+        return Objects.hash(this.chunks, this.regionTag);
     }
 
     @Override
-    public boolean equals(final Object that) {
-        return this == that || (that instanceof RegionCompoundTag && this.tags.equals(((RegionCompoundTag) that).tags));
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (!(obj instanceof RegionCompoundTag))
+            return false;
+        RegionCompoundTag that = (RegionCompoundTag) obj;
+        return this.chunks.equals(that.chunks) && this.regionTag.equals(that.regionTag);
     }
 }
 

@@ -1,12 +1,12 @@
 package ro.nicuch.tag.fallback;
 
-import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 
 import java.io.File;
 
 public interface CoruptedDataFallback {
     String getCoruptedDataId();
     File getCoruptedDataFile();
-    CompoundTag getCoruptedDataCompoundTag();
+    Tag getCoruptedDataCompoundTag();
     String getWorldName();
 }

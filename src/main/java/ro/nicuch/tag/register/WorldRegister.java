@@ -10,6 +10,7 @@ import ro.nicuch.tag.events.WorldTagLoadEvent;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.RegionUUID;
@@ -121,10 +122,9 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public void tryUnloading() {
-        Iterator<Map.Entry<RegionUUID, RegionRegister>> regionIterator = this.regions.entrySet().iterator();
+        Iterator<RegionRegister> regionIterator = this.regions.values().iterator();
         while (regionIterator.hasNext()) {
-            Map.Entry<RegionUUID, RegionRegister> regionEntry = regionIterator.next();
-            RegionRegister regionRegister = regionEntry.getValue();
+            RegionRegister regionRegister = regionIterator.next();
             if (regionRegister.canBeUnloaded()) {
                 regionRegister.writeRegionFile();
                 regionIterator.remove();
@@ -195,7 +195,7 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     @Override
-    public CompoundTag getCoruptedDataCompoundTag() {
+    public Tag getCoruptedDataCompoundTag() {
         return this.worldTag;
     }
 

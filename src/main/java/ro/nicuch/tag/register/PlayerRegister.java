@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import ro.nicuch.tag.fallback.CoruptedDataFallback;
 import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
+import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.nbt.TagType;
 
@@ -88,7 +89,7 @@ public class PlayerRegister implements CoruptedDataFallback {
     }
 
     @Override
-    public CompoundTag getCoruptedDataCompoundTag() {
+    public Tag getCoruptedDataCompoundTag() {
         return this.playerTag;
     }
 
