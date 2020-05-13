@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 public class RegionRegister implements CoruptedDataFallback {
     private final WorldRegister register;
@@ -154,10 +155,7 @@ public class RegionRegister implements CoruptedDataFallback {
     public void saveChunks() {
         for (ChunkRegister chunk : this.chunks.values())
             if (chunk.getChunk().isLoaded()) {
-                Set<UUID> entitiesUUID = new HashSet<>();
-                for (Entity entity : chunk.getChunk().getEntities())
-                    entitiesUUID.add(entity.getUniqueId());
-                chunk.savePopulation(true, entitiesUUID);
+                chunk.savePopulation(true, Arrays.stream(chunk.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
             } else
                 chunk.savePopulation(false, null);
     }

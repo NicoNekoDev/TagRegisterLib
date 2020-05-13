@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 public class WorldRegister implements CoruptedDataFallback {
     private CompoundTag worldTag;
@@ -130,9 +131,7 @@ public class WorldRegister implements CoruptedDataFallback {
                 regionIterator.remove();
             }
         }
-        Set<UUID> worldEntities = new HashSet<>();
-        for (Entity entity : this.world.getEntities())
-            worldEntities.add(entity.getUniqueId());
+        Set<UUID> worldEntities = this.world.getEntities().stream().map(Entity::getUniqueId).collect(Collectors.toSet());
         for (UUID uuid : this.entities.keySet()) {
             if (!worldEntities.contains(uuid))
                 this.entities.remove(uuid);

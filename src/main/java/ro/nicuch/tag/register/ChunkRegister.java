@@ -65,11 +65,13 @@ public class ChunkRegister {
     public void savePopulation(boolean checkEntities, Set<UUID> entities) {
         WorldRegister worldRegister = this.register.getWorldRegister();
         if (checkEntities) {
-            for (UUID uuid : entities)
+            this.chunkTag.clearEntities();
+            for (UUID uuid : entities) {
                 worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
                     if (!compoundTag.isEmpty())
                         this.chunkTag.putEntity(uuid, compoundTag);
                 });
+            }
             this.entities.clear(); // clean-up entities that doesn't exist
             this.entities.addAll(entities); // these are the new entities in that chunk
         } else {
