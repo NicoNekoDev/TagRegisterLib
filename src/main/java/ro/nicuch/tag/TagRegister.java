@@ -54,7 +54,7 @@ public class TagRegister {
     public static boolean isStored(Entity entity) {
         if (entity instanceof Player)
             return isPlayerStored(entity.getUniqueId());
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).isEntityStored(entity.getUniqueId());
+        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).isEntityStored(entity);
     }
 
     public static boolean isStored(Block block) {
@@ -64,7 +64,7 @@ public class TagRegister {
     public static Optional<CompoundTag> getStored(Entity entity) {
         if (entity instanceof Player)
             return getPlayerTag(entity.getUniqueId());
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).getStoredEntity(entity.getUniqueId());
+        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).getStoredEntity(entity);
     }
 
     public static Optional<CompoundTag> getStored(Block block) {
@@ -74,7 +74,7 @@ public class TagRegister {
     public static CompoundTag create(Entity entity) {
         if (entity instanceof Player)
             return getPlayerRegister(entity.getUniqueId()).orElseGet(() -> players.put(entity.getUniqueId(), new PlayerRegister(entity.getUniqueId()))).getPlayerTag(); //Might not be null, ever
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).createStoredEntity(entity.getUniqueId());
+        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).createStoredEntity(entity);
     }
 
     public static CompoundTag create(Block block) {

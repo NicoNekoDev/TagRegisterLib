@@ -179,7 +179,7 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean isEntityStored(UUID uuid) {
-        return this.register.isEntityStored(uuid);
+        return this.register.isEntityStoredInternal(uuid);
     }
 
     public Optional<CompoundTag> getStoredEntity(Entity entity) {
@@ -191,11 +191,11 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public Optional<CompoundTag> getStoredEntity(UUID uuid) {
-        return this.register.getStoredEntity(uuid);
+        return this.register.getStoredEntityInternal(uuid);
     }
 
     public CompoundTag createStoredEntity(UUID uuid) {
-        return this.register.createStoredEntity(uuid);
+        return this.register.createStoredEntityInternal(uuid);
     }
 
     public RegionRegister setRegionTag(RegionCompoundTag tag) {

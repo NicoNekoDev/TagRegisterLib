@@ -38,7 +38,7 @@ public class ChunkRegister {
         }
         for (Map.Entry<UUID, CompoundTag> entitiesEntry : this.chunkTag.entrySetEntities()) {
             UUID entityUUID = entitiesEntry.getKey();
-            register.getWorldRegister().loadEntity(entityUUID, entitiesEntry.getValue());
+            register.getWorldRegister().loadEntityInternal(entityUUID, entitiesEntry.getValue());
             this.entities.add(entityUUID);
         }
         Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
@@ -66,14 +66,16 @@ public class ChunkRegister {
         WorldRegister worldRegister = this.register.getWorldRegister();
         if (checkEntities) {
             for (UUID uuid : entities)
-                worldRegister.getStoredEntity(uuid).ifPresent(compoundTag -> {
+                worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
                     if (!compoundTag.isEmpty())
                         this.chunkTag.putEntity(uuid, compoundTag);
                 });
+            this.entities.clear(); // clean-up entities that doesn't exist
+            this.entities.addAll(entities); // these are the new entities in that chunk
         } else {
             for (UUID uuid : this.entities) {
-                if (worldRegister.isEntityStored(uuid)) {
-                    this.chunkTag.putEntity(uuid, worldRegister.unloadEntity(uuid));
+                if (worldRegister.isEntityStoredInternal(uuid)) {
+                    this.chunkTag.putEntity(uuid, worldRegister.unloadEntityInternal(uuid));
                 }
             }
         }
@@ -126,7 +128,12 @@ public class ChunkRegister {
     }
 
     public CompoundTag createStoredEntity(UUID uuid) {
+        this.refferenceEntity(uuid);
         return this.register.createStoredEntity(uuid);
+    }
+
+    public void refferenceEntity(UUID uuid) {
+        this.entities.add(uuid);
     }
 
     public RegionRegister getRegionRegister() {

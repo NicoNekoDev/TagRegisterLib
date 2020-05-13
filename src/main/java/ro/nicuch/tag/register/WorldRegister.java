@@ -100,24 +100,24 @@ public class WorldRegister implements CoruptedDataFallback {
         return Optional.ofNullable(this.regions.get(RegionUUID.fromChunk(chunk)));
     }
 
-    public CompoundTag loadEntity(UUID uuid, CompoundTag tag) {
+    public CompoundTag loadEntityInternal(UUID uuid, CompoundTag tag) {
         this.entities.put(uuid, tag);
         return tag;
     }
 
-    public CompoundTag createStoredEntity(UUID uuid) {
-        return loadEntity(uuid, new CompoundTag());
+    public CompoundTag createStoredEntityInternal(UUID uuid) {
+        return loadEntityInternal(uuid, new CompoundTag());
     }
 
-    public boolean isEntityStored(UUID uuid) {
+    public boolean isEntityStoredInternal(UUID uuid) {
         return this.entities.containsKey(uuid);
     }
 
-    public CompoundTag unloadEntity(UUID uuid) {
+    public CompoundTag unloadEntityInternal(UUID uuid) {
         return this.entities.remove(uuid);
     }
 
-    public Optional<CompoundTag> getStoredEntity(UUID uuid) {
+    public Optional<CompoundTag> getStoredEntityInternal(UUID uuid) {
         return Optional.ofNullable(this.entities.get(uuid));
     }
 
@@ -163,25 +163,22 @@ public class WorldRegister implements CoruptedDataFallback {
     public boolean isEntityStored(Entity entity) {
         Chunk realChunk = entity.getLocation().getChunk();
         RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        if (region.isChunkNotLoaded(realChunk))
-            region.loadChunk(realChunk);
-        return this.isEntityStored(entity.getUniqueId());
+        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
+        return chunk.isEntityStored(entity.getUniqueId());
     }
 
     public Optional<CompoundTag> getStoredEntity(Entity entity) {
         Chunk realChunk = entity.getLocation().getChunk();
         RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        if (region.isChunkNotLoaded(realChunk))
-            region.loadChunk(realChunk);
-        return this.getStoredEntity(entity.getUniqueId());
+        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
+        return chunk.getStoredEntity(entity.getUniqueId());
     }
 
     public CompoundTag createStoredEntity(Entity entity) {
         Chunk realChunk = entity.getLocation().getChunk();
         RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        if (region.isChunkNotLoaded(realChunk))
-            region.loadChunk(realChunk);
-        return this.createStoredEntity(entity.getUniqueId());
+        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
+        return chunk.createStoredEntity(entity.getUniqueId());
     }
 
     @Override
