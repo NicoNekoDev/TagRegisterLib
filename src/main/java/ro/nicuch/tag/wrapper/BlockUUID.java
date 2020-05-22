@@ -7,31 +7,31 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BlockUUID {
-    private final int x;
-    private final int y;
-    private final int z;
+    private final byte x;
+    private final byte y;
+    private final byte z;
 
     private final static Pattern pattern = Pattern.compile("x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)");
 
-    public BlockUUID(final int x, final int y, final int z) {
+    public BlockUUID(final byte x, final byte y, final byte z) {
         this.x = x;
         this.y = y;
         this.z = z;
     }
 
     public BlockUUID(final Block block) {
-        this(block.getX(), block.getY(), block.getZ());
+        this((byte) Math.floorMod(block.getX(), 16), (byte) ((byte) block.getY() - 128), (byte) Math.floorMod(block.getZ(), 16));
     }
 
-    public final int getX() {
+    public final byte getX() {
         return this.x;
     }
 
-    public final int getY() {
+    public final byte getY() {
         return this.y;
     }
 
-    public final int getZ() {
+    public final byte getZ() {
         return this.z;
     }
 
@@ -40,9 +40,9 @@ public class BlockUUID {
         try {
             Matcher matcher = pattern.matcher(id);
             if (matcher.find()) {
-                int x = Integer.parseInt(matcher.group(1));
-                int y = Integer.parseInt(matcher.group(2));
-                int z = Integer.parseInt(matcher.group(3));
+                byte x = Byte.parseByte(matcher.group(1));
+                byte y = Byte.parseByte(matcher.group(2));
+                byte z = Byte.parseByte(matcher.group(3));
                 return new BlockUUID(x, y, z);
             } else
                 throw new IllegalArgumentException("BlockUUID couldn't parse from string.");
@@ -68,6 +68,6 @@ public class BlockUUID {
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, z);
+        return Objects.hash(x, y, z);
     }
 }

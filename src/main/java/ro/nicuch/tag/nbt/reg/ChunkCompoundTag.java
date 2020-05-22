@@ -191,25 +191,24 @@ public final class ChunkCompoundTag implements Tag {
         if (depth > MAX_DEPTH) {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         }
-        byte type;
-        while ((type = input.readByte()) != (byte) 0) {
-            if (type == (byte) 1) {
-                final int x = input.readInt();
-                final int y = input.readInt();
-                final int z = input.readInt();
-                final BlockUUID key = new BlockUUID(x, y, z);
-                final CompoundTag tag = new CompoundTag();
-                tag.read(input, depth + 1);
-                this.blocks.put(key, tag);
-            } else if (type == (byte) 2) {
-                final String id = input.readUTF();
-                final UUID key = UUID.fromString(id);
-                final CompoundTag tag = new CompoundTag();
-                tag.read(input, depth + 1);
-                this.entities.put(key, tag);
-            } else if (type == (byte) 3) { //last byte
-                this.chunktag.read(input, depth + 1);
-            }
+        while (input.readByte() == (byte) 1) {
+            final byte x = input.readByte();
+            final byte y = input.readByte();
+            final byte z = input.readByte();
+            final BlockUUID key = new BlockUUID(x, y, z);
+            final CompoundTag tag = new CompoundTag();
+            tag.read(input, depth + 1);
+            this.blocks.put(key, tag);
+        }
+        while (input.readByte() == (byte) 2) {
+            final String id = input.readUTF();
+            final UUID key = UUID.fromString(id);
+            final CompoundTag tag = new CompoundTag();
+            tag.read(input, depth + 1);
+            this.entities.put(key, tag);
+        }
+        if (input.readByte() == (byte) 3) { //last byte
+            this.chunktag.read(input, depth + 1);
         }
     }
 
@@ -221,11 +220,12 @@ public final class ChunkCompoundTag implements Tag {
                 continue; //skip some bytes
             final BlockUUID key = blocksEntry.getKey();
             output.writeByte((byte) 1); //write for blocks
-            output.writeInt(key.getX());
-            output.writeInt(key.getY());
-            output.writeInt(key.getZ());
+            output.writeByte(key.getX());
+            output.writeByte(key.getY());
+            output.writeByte(key.getZ());
             tag.write(output);
         }
+        output.writeByte((byte) 0); // 0 means end
         for (Map.Entry<UUID, CompoundTag> entitiesEntry : this.entities.entrySet()) {
             final CompoundTag tag = entitiesEntry.getValue();
             if (tag.isEmpty())
@@ -235,11 +235,12 @@ public final class ChunkCompoundTag implements Tag {
             output.writeUTF(key.toString());
             tag.write(output);
         }
+        output.writeByte((byte) 0); // 0 means end
         if (!this.chunktag.isEmpty()) {
             output.writeByte((byte) 3); //write for chunk tag
             this.chunktag.write(output);
         }
-        output.writeByte((byte) 0); // 0 means no more bytes to read
+        output.writeByte((byte) 0); // 0 means end
     }
 
     @Override

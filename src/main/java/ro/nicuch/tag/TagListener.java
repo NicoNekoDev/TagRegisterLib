@@ -34,6 +34,8 @@ public class TagListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(PlayerCommandPreprocessEvent event) {
+        if (!event.getPlayer().isOp())
+            return;
         if (event.getMessage().equalsIgnoreCase("/save-all"))
             Bukkit.getScheduler().runTaskAsynchronously(TagRegister.getPlugin(), TagRegister::saveAll);
     }

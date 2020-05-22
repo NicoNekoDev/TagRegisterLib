@@ -89,17 +89,17 @@ public class ChunkRegister {
     }
 
     public boolean isBlockStored(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
+        BlockUUID blockUUID = new BlockUUID(block);
         return this.chunkTag.containsBlock(blockUUID);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
+        BlockUUID blockUUID = new BlockUUID(block);
         return Optional.ofNullable(this.chunkTag.getBlock(blockUUID));
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block.getX(), block.getY(), block.getZ());
+        BlockUUID blockUUID = new BlockUUID(block);
         CompoundTag tag = new CompoundTag();
         this.chunkTag.putBlock(blockUUID, tag);
         return tag;
