@@ -157,6 +157,13 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean canBeUnloaded() {
+        if (this.regionTag.isCaching()) {
+            if (!this.regionTag.canChangeToCache())
+                this.regionTag.changeToMemory();
+        } else {
+            if (this.regionTag.canChangeToCache())
+                this.regionTag.changeToCache();
+        }
         synchronized (this.chunks) {
             Iterator<ChunkRegister> chunkIterator = this.chunks.values().iterator();
             while (chunkIterator.hasNext()) {

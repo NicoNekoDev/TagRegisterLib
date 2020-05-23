@@ -23,17 +23,65 @@ public final class RegionCompoundTag implements Tag, Closeable {
     /**
      * The map of tags.
      */
-    private final Map<ChunkUUID, ChunkCompoundTag> chunks;
-    private final DB mapDB;
+    private Map<ChunkUUID, ChunkCompoundTag> chunks;
+    private DB mapDB;
+    private boolean caching;
 
     private final CompoundTag regionTag = new CompoundTag();
 
     public RegionCompoundTag() {
+        this(false);
+    }
+
+    public RegionCompoundTag(boolean enableFileCaching) {
+        if (enableFileCaching) {
+            File cacheFile = new File(TagRegister.getPlugin().getDataFolder() + File.separator + "cache" + File.separator + UUID.randomUUID().toString() + ".cache");
+            if (cacheFile.exists())
+                cacheFile.delete();
+            this.mapDB = DBMaker.fileDB(cacheFile).closeOnJvmShutdown().fileDeleteAfterClose().transactionEnable().make();
+            this.caching = true;
+        } else {
+            this.caching = false;
+            this.mapDB = DBMaker.memoryDB().closeOnJvmShutdown().transactionEnable().make();
+        }
+        this.chunks = this.mapDB.hashMap("chunks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
+    }
+
+    public boolean isCaching() {
+        return this.caching;
+    }
+
+    public void changeToCache() {
+        Map<ChunkUUID, ChunkCompoundTag> copy = new HashMap<>(this.chunks);
+        this.mapDB.close(); //close current
         File cacheFile = new File(TagRegister.getPlugin().getDataFolder() + File.separator + "cache" + File.separator + UUID.randomUUID().toString() + ".cache");
         if (cacheFile.exists())
             cacheFile.delete();
         this.mapDB = DBMaker.fileDB(cacheFile).closeOnJvmShutdown().fileDeleteAfterClose().transactionEnable().make();
         this.chunks = this.mapDB.hashMap("chunks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
+        this.chunks.putAll(copy);
+        this.caching = true;
+    }
+
+    public void changeToMemory() {
+        Map<ChunkUUID, ChunkCompoundTag> copy = new HashMap<>(this.chunks);
+        this.mapDB.close(); //close current
+        this.mapDB = DBMaker.memoryDB().closeOnJvmShutdown().transactionEnable().make();
+        this.chunks = this.mapDB.hashMap("chunks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
+        this.chunks.putAll(copy);
+        this.caching = false;
+    }
+
+    public boolean canChangeToCache() {
+        int n = this.regionTag.size();
+        if (n >= 63)
+            return true;
+        for (ChunkCompoundTag chunkCompoundTag : this.chunks.values()) {
+            n += chunkCompoundTag.sizeBlocks() + chunkCompoundTag.sizeEntities();
+            if (n >= 63)
+                return true;
+        }
+        return false;
     }
 
     public boolean isEmpty(boolean removeEmpty) {
@@ -50,7 +98,9 @@ public final class RegionCompoundTag implements Tag, Closeable {
      * Clear the tag.
      */
     public void clearChunkCompounds() {
-        chunks.clear();
+        this.chunks.clear();
+        if (this.caching)
+            changeToMemory();
     }
 
     /**
@@ -70,7 +120,15 @@ public final class RegionCompoundTag implements Tag, Closeable {
      * @param tag the tag
      */
     public ChunkCompoundTag putChunkCompound(final ChunkUUID key, final ChunkCompoundTag tag) {
-        return this.chunks.put(key, tag);
+        ChunkCompoundTag compoundTag = this.chunks.put(key, tag);
+        if (this.caching) {
+            if (!this.canChangeToCache())
+                this.changeToMemory();
+        } else {
+            if (this.canChangeToCache())
+                this.changeToCache();
+        }
+        return compoundTag;
     }
 
     /**
@@ -79,7 +137,15 @@ public final class RegionCompoundTag implements Tag, Closeable {
      * @param key the key
      */
     public ChunkCompoundTag removeChunkCompound(final ChunkUUID key) {
-        return this.chunks.remove(key);
+        ChunkCompoundTag compoundTag = this.chunks.remove(key);
+        if (this.caching) {
+            if (!this.canChangeToCache())
+                this.changeToMemory();
+        } else {
+            if (this.canChangeToCache())
+                this.changeToCache();
+        }
+        return compoundTag;
     }
 
     /**
@@ -122,6 +188,14 @@ public final class RegionCompoundTag implements Tag, Closeable {
         if (depth > MAX_DEPTH) {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         }
+        int total = input.readInt(); //read total size
+        if (this.caching) {
+            if (total < 63)
+                this.changeToMemory();
+        } else {
+            if (total >= 63)
+                this.changeToCache();
+        }
         while (input.readByte() == (byte) 1) {
             final int x = input.readInt();
             final int z = input.readInt();
@@ -137,6 +211,10 @@ public final class RegionCompoundTag implements Tag, Closeable {
 
     @Override
     public void write(final DataOutput output) throws IOException {
+        int total = this.regionTag.size();
+        for (ChunkCompoundTag tag : this.chunks.values())
+            total += tag.sizeBlocks() + tag.sizeEntities();
+        output.writeInt(total); // total size
         for (Map.Entry<ChunkUUID, ChunkCompoundTag> chunkCompoundEntry : this.chunks.entrySet()) {
             final ChunkCompoundTag tag = chunkCompoundEntry.getValue();
             if (tag.isBlocksEmpty() && tag.isEntitiesEmpty() && tag.getChunkCompound().isEmpty())
