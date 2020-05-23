@@ -1,35 +1,46 @@
 package ro.nicuch.tag;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.World;
-import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
-import ro.nicuch.tag.register.RegionRegister;
-import ro.nicuch.tag.register.WorldRegister;
-
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import ro.nicuch.tag.thread.TagProcessRunnable;
 
 public class TagListener implements Listener {
 
+    private final TagPlugin plugin;
+
+    public TagListener(TagPlugin plugin) {
+        Bukkit.getScheduler().runTaskTimerAsynchronously((this.plugin = plugin), new TagProcessRunnable(), 1L, 1L);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void event(ChunkLoadEvent event) {
+        TagProcessRunnable.addToLoad(event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void event(ChunkUnloadEvent event) {
+        TagProcessRunnable.addToUnload(event);
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(WorldSaveEvent event) {
-        Bukkit.getScheduler().runTaskAsynchronously(TagRegister.getPlugin(), () ->
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
                 TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void event(WorldUnloadEvent event) {
-        TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions();
-        TagRegister.unloadWorld(event.getWorld());
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions();
+            TagRegister.unloadWorld(event.getWorld());
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -37,19 +48,6 @@ public class TagListener implements Listener {
         if (!event.getPlayer().isOp())
             return;
         if (event.getMessage().equalsIgnoreCase("/save-all"))
-            Bukkit.getScheduler().runTaskAsynchronously(TagRegister.getPlugin(), TagRegister::saveAll);
-    }
-
-    @EventHandler
-    public void event(ChunkUnloadEvent event) {
-        World world = event.getWorld();
-        Chunk chunk = event.getChunk();
-        Optional<WorldRegister> worldRegister = TagRegister.getWorld(world);
-        if (worldRegister.isEmpty())
-            return;
-        Optional<RegionRegister> regionRegister = worldRegister.get().getRegion(chunk);
-        if (regionRegister.isEmpty())
-            return;
-        regionRegister.get().unloadChunk(chunk, Arrays.stream(event.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, TagRegister::saveAll);
     }
 }

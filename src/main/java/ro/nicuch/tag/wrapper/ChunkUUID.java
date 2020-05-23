@@ -54,6 +54,10 @@ public class ChunkUUID {
         return this.x == that.x && this.z == that.z;
     }
 
+    public String fileName() {
+        return x + "." + z;
+    }
+
     @Override
     public String toString() {
         return "x" + x + ",z" + z + "";

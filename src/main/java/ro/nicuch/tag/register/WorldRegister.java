@@ -128,6 +128,7 @@ public class WorldRegister implements CoruptedDataFallback {
             RegionRegister regionRegister = regionIterator.next();
             if (regionRegister.canBeUnloaded()) {
                 regionRegister.writeRegionFile();
+                regionRegister.getRegionTag().close(); // close cache
                 regionIterator.remove();
             }
         }

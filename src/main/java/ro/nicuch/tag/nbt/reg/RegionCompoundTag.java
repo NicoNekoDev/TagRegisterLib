@@ -1,24 +1,22 @@
 package ro.nicuch.tag.nbt.reg;
 
+import org.mapdb.DB;
+import org.mapdb.DBMaker;
+import ro.nicuch.tag.TagRegister;
+import ro.nicuch.tag.TagRegisterSerializer;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.io.*;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * A compound tag.
  */
-public final class RegionCompoundTag implements Tag {
+public final class RegionCompoundTag implements Tag, Closeable {
     /**
      * The maximum depth.
      */
@@ -26,9 +24,18 @@ public final class RegionCompoundTag implements Tag {
     /**
      * The map of tags.
      */
-    private final ConcurrentMap<ChunkUUID, ChunkCompoundTag> chunks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ChunkUUID, ChunkCompoundTag> chunks;
+    private final DB mapDB;
 
     private final CompoundTag regionTag = new CompoundTag();
+
+    public RegionCompoundTag() {
+        File cacheFile = new File(TagRegister.getPlugin().getDataFolder() + File.separator + "cache" + File.separator + UUID.randomUUID().toString() + ".cache");
+        if (cacheFile.exists())
+            cacheFile.delete();
+        this.mapDB = DBMaker.fileDB(cacheFile).closeOnJvmShutdown().fileDeleteAfterClose().transactionEnable().make();
+        this.chunks = this.mapDB.hashMap("blocks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
+    }
 
     public boolean isEmpty(boolean removeEmpty) {
         if (removeEmpty)
@@ -176,6 +183,12 @@ public final class RegionCompoundTag implements Tag {
             return false;
         RegionCompoundTag that = (RegionCompoundTag) obj;
         return this.chunks.equals(that.chunks) && this.regionTag.equals(that.regionTag);
+    }
+
+    @Override
+    public void close() {
+        if (!this.mapDB.isClosed())
+            this.mapDB.close();
     }
 }
 

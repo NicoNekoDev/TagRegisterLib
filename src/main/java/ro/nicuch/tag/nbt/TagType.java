@@ -122,7 +122,7 @@ public enum TagType implements Predicate<TagType> {
      *
      * @return a new tag
      */
-    Tag create() {
+    public Tag create() {
         return this.factory.get();
     }
 
@@ -138,7 +138,7 @@ public enum TagType implements Predicate<TagType> {
      * @return the tag type
      * @throws ArrayIndexOutOfBoundsException if the id is not without bounds
      */
-    static TagType of(final byte id) {
+    public static TagType of(final byte id) {
         return TYPES[id];
     }
 }
