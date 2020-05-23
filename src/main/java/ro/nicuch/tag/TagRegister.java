@@ -10,10 +10,7 @@ import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.register.PlayerRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.*;
 import java.util.logging.Logger;
 
 public class TagRegister {
@@ -28,8 +25,8 @@ public class TagRegister {
         debug = !debug;
     }
 
-    private final static ConcurrentMap<String, WorldRegister> worlds = new ConcurrentHashMap<>();
-    private final static ConcurrentMap<UUID, PlayerRegister> players = new ConcurrentHashMap<>();
+    private final static Map<String, WorldRegister> worlds = Collections.synchronizedMap(new HashMap<>());
+    private final static Map<UUID, PlayerRegister> players = Collections.synchronizedMap(new HashMap<>());
 
     public static Optional<PlayerRegister> getPlayerRegister(UUID uuid) {
         if (players.containsKey(uuid))
@@ -82,41 +79,53 @@ public class TagRegister {
     }
 
     public static boolean isWorldLoaded(World world) {
-        return worlds.containsKey(world.getName());
+        synchronized (worlds) {
+            return worlds.containsKey(world.getName());
+        }
     }
 
     public static WorldRegister loadWorld(World world) {
-        WorldRegister wr = new WorldRegister(world);
-        worlds.put(world.getName(), wr);
-        return wr;
+        synchronized (worlds) {
+            WorldRegister wr = new WorldRegister(world);
+            worlds.put(world.getName(), wr);
+            return wr;
+        }
     }
 
     public static WorldRegister unloadWorld(World world) {
-        return worlds.remove(world.getName());
+        synchronized (worlds) {
+            return worlds.remove(world.getName());
+        }
     }
 
     public static Optional<WorldRegister> getWorld(World world) {
-        return Optional.ofNullable(worlds.get(world.getName()));
+        synchronized (worlds) {
+            return Optional.ofNullable(worlds.get(world.getName()));
+        }
     }
 
     public static void tryUnloading() {
-        for (WorldRegister world : worlds.values())
-            world.tryUnloading();
-        for (UUID uuid : players.keySet()) {
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
-            if (offlinePlayer.isOnline())
-                continue;
-            PlayerRegister playerRegister = players.get(uuid);
-            players.remove(uuid);
-            playerRegister.writePlayerFile();
+        synchronized (worlds) {
+            for (WorldRegister world : worlds.values())
+                world.tryUnloading();
+            for (UUID uuid : players.keySet()) {
+                OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
+                if (offlinePlayer.isOnline())
+                    continue;
+                PlayerRegister playerRegister = players.get(uuid);
+                players.remove(uuid);
+                playerRegister.writePlayerFile();
+            }
         }
     }
 
     public static void saveAll() {
-        for (WorldRegister world : worlds.values())
-            world.saveRegions();
-        for (PlayerRegister playerRegister : players.values())
-            playerRegister.writePlayerFile();
+        synchronized (worlds) {
+            for (WorldRegister world : worlds.values())
+                world.saveRegions();
+            for (PlayerRegister playerRegister : players.values())
+                playerRegister.writePlayerFile();
+        }
     }
 
     public static Logger getLogger() {

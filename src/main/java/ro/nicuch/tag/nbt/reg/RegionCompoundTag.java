@@ -11,7 +11,6 @@ import ro.nicuch.tag.wrapper.ChunkUUID;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * A compound tag.
@@ -24,7 +23,7 @@ public final class RegionCompoundTag implements Tag, Closeable {
     /**
      * The map of tags.
      */
-    private final ConcurrentMap<ChunkUUID, ChunkCompoundTag> chunks;
+    private final Map<ChunkUUID, ChunkCompoundTag> chunks;
     private final DB mapDB;
 
     private final CompoundTag regionTag = new CompoundTag();
@@ -34,7 +33,7 @@ public final class RegionCompoundTag implements Tag, Closeable {
         if (cacheFile.exists())
             cacheFile.delete();
         this.mapDB = DBMaker.fileDB(cacheFile).closeOnJvmShutdown().fileDeleteAfterClose().transactionEnable().make();
-        this.chunks = this.mapDB.hashMap("blocks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
+        this.chunks = this.mapDB.hashMap("chunks").keySerializer(TagRegisterSerializer.CHUNK_SERIALIZER).valueSerializer(TagRegisterSerializer.CHUNK_COMPOUND_TAG_SERIALIZER).createOrOpen();
     }
 
     public boolean isEmpty(boolean removeEmpty) {
@@ -123,18 +122,16 @@ public final class RegionCompoundTag implements Tag, Closeable {
         if (depth > MAX_DEPTH) {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         }
-        byte type;
-        while ((type = input.readByte()) != (byte) 0) {
-            if (type == (byte) 1) {
-                final int x = input.readInt();
-                final int z = input.readInt();
-                final ChunkUUID key = new ChunkUUID(x, z);
-                final ChunkCompoundTag tag = new ChunkCompoundTag();
-                tag.read(input, depth + 1);
-                this.chunks.put(key, tag);
-            } else if (type == (byte) 2) { //last byte
-                this.regionTag.read(input, depth + 1);
-            }
+        while (input.readByte() == (byte) 1) {
+            final int x = input.readInt();
+            final int z = input.readInt();
+            final ChunkUUID key = new ChunkUUID(x, z);
+            final ChunkCompoundTag tag = new ChunkCompoundTag();
+            tag.read(input, depth + 1);
+            this.chunks.put(key, tag);
+        }
+        if (input.readByte() == (byte) 2) { //last byte
+            this.regionTag.read(input, depth + 1);
         }
     }
 
@@ -150,6 +147,7 @@ public final class RegionCompoundTag implements Tag, Closeable {
             output.writeInt(key.getZ());
             tag.write(output);
         }
+        output.writeByte((byte) 0);
         if (!this.regionTag.isEmpty()) {
             output.writeByte((byte) 2); //write for chunk tag
             this.regionTag.write(output);

@@ -18,8 +18,6 @@ import ro.nicuch.tag.wrapper.RegionUUID;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 public class WorldRegister implements CoruptedDataFallback {
@@ -27,8 +25,8 @@ public class WorldRegister implements CoruptedDataFallback {
     private final File worldFile;
     private final File worldDataFolder;
     private final World world;
-    private final ConcurrentMap<RegionUUID, RegionRegister> regions = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>();
+    private final Map<RegionUUID, RegionRegister> regions = new HashMap<>();
+    private final Map<UUID, CompoundTag> entities = new HashMap<>();
 
     public WorldRegister(World world) {
         this.world = world;
@@ -88,22 +86,30 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public boolean isRegionLoaded(Chunk chunk) {
-        return this.regions.containsKey(RegionUUID.fromChunk(chunk));
+        synchronized (this.regions) {
+            return this.regions.containsKey(RegionUUID.fromChunk(chunk));
+        }
     }
 
     public RegionRegister loadRegion(Chunk chunk) {
-        RegionRegister region = new RegionRegister(this, chunk);
-        this.regions.put(region.getRegionUUID(), region);
-        return region;
+        synchronized (this.regions) {
+            RegionRegister region = new RegionRegister(this, chunk);
+            this.regions.put(region.getRegionUUID(), region);
+            return region;
+        }
     }
 
     public Optional<RegionRegister> getRegion(Chunk chunk) {
-        return Optional.ofNullable(this.regions.get(RegionUUID.fromChunk(chunk)));
+        synchronized (this.regions) {
+            return Optional.ofNullable(this.regions.get(RegionUUID.fromChunk(chunk)));
+        }
     }
 
     public CompoundTag loadEntityInternal(UUID uuid, CompoundTag tag) {
-        this.entities.put(uuid, tag);
-        return tag;
+        synchronized (this.entities) {
+            this.entities.put(uuid, tag);
+            return tag;
+        }
     }
 
     public CompoundTag createStoredEntityInternal(UUID uuid) {
@@ -111,41 +117,53 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public boolean isEntityStoredInternal(UUID uuid) {
-        return this.entities.containsKey(uuid);
+        synchronized (this.entities) {
+            return this.entities.containsKey(uuid);
+        }
     }
 
     public CompoundTag unloadEntityInternal(UUID uuid) {
-        return this.entities.remove(uuid);
+        synchronized (this.entities) {
+            return this.entities.remove(uuid);
+        }
     }
 
     public Optional<CompoundTag> getStoredEntityInternal(UUID uuid) {
-        return Optional.ofNullable(this.entities.get(uuid));
+        synchronized (this.entities) {
+            return Optional.ofNullable(this.entities.get(uuid));
+        }
     }
 
     public void tryUnloading() {
-        Iterator<RegionRegister> regionIterator = this.regions.values().iterator();
-        while (regionIterator.hasNext()) {
-            RegionRegister regionRegister = regionIterator.next();
-            if (regionRegister.canBeUnloaded()) {
-                regionRegister.writeRegionFile();
-                regionRegister.getRegionTag().close(); // close cache
-                regionIterator.remove();
+        synchronized (this.regions) {
+            Iterator<RegionRegister> regionIterator = this.regions.values().iterator();
+            while (regionIterator.hasNext()) {
+                RegionRegister regionRegister = regionIterator.next();
+                if (regionRegister.canBeUnloaded()) {
+                    regionRegister.writeRegionFile();
+                    regionRegister.getRegionTag().close(); // close cache
+                    regionIterator.remove();
+                }
             }
         }
-        Set<UUID> worldEntities = this.world.getEntities().stream().map(Entity::getUniqueId).collect(Collectors.toSet());
-        for (UUID uuid : this.entities.keySet()) {
-            if (!worldEntities.contains(uuid))
-                this.entities.remove(uuid);
+        synchronized (this.entities) {
+            Set<UUID> worldEntities = this.world.getEntities().stream().map(Entity::getUniqueId).collect(Collectors.toSet());
+            for (UUID uuid : this.entities.keySet()) {
+                if (!worldEntities.contains(uuid))
+                    this.entities.remove(uuid);
+            }
+            worldEntities.clear(); // manual gc
         }
-        worldEntities.clear(); // manual gc
     }
 
     public void saveRegions() {
-        for (RegionRegister region : this.regions.values()) {
-            region.saveChunks();
-            region.writeRegionFile();
+        synchronized (this.regions) {
+            for (RegionRegister region : this.regions.values()) {
+                region.saveChunks();
+                region.writeRegionFile();
+            }
+            this.writeWorldFile();
         }
-        this.writeWorldFile();
     }
 
     public boolean isBlockStored(Block block) {

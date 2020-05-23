@@ -19,13 +19,11 @@ import ro.nicuch.tag.wrapper.RegionUUID;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 public class RegionRegister implements CoruptedDataFallback {
     private final WorldRegister register;
-    private final ConcurrentMap<ChunkUUID, ChunkRegister> chunks = new ConcurrentHashMap<>();
+    private final Map<ChunkUUID, ChunkRegister> chunks = new HashMap<>();
     private final int x;
     private final int z;
     private final File regionFile;
@@ -41,11 +39,11 @@ public class RegionRegister implements CoruptedDataFallback {
         this(register, Math.floorDiv(chunk.getX(), 32), Math.floorDiv(chunk.getZ(), 32));
     }
 
-    public RegionRegister(WorldRegister register, int x, int z) {
-        this.uuid = new RegionUUID(x, z);
+    public RegionRegister(WorldRegister register, RegionUUID uuid) {
+        this.uuid = uuid;
         this.register = register;
-        this.x = x;
-        this.z = z;
+        this.x = uuid.getX();
+        this.z = uuid.getZ();
         this.regionFile = new File(register.getDirectory().getPath() + File.separator + "r." + x + "." + z + ".dat");
         if (!this.regionFile.exists()) {
             this.regionTag = new RegionCompoundTag();
@@ -59,6 +57,10 @@ public class RegionRegister implements CoruptedDataFallback {
         }
         Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
                 Bukkit.getPluginManager().callEvent(new RegionTagLoadEvent(this, this.regionTag)));
+    }
+
+    public RegionRegister(WorldRegister register, int x, int z) {
+        this(register, new RegionUUID(x, z));
     }
 
     public WorldRegister getWorldRegister() {
@@ -102,62 +104,80 @@ public class RegionRegister implements CoruptedDataFallback {
     }
 
     public boolean isChunkNotLoaded(Chunk chunk) {
-        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
-        return !this.chunks.containsKey(chunkUUID);
+        synchronized (this.chunks) {
+            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
+            return !this.chunks.containsKey(chunkUUID);
+        }
     }
 
     public boolean isChunkNotLoaded(ChunkUUID chunkUUID) {
-        return !this.chunks.containsKey(chunkUUID);
+        synchronized (this.chunks) {
+            return !this.chunks.containsKey(chunkUUID);
+        }
     }
 
     public ChunkRegister loadChunk(Chunk chunk) {
-        ChunkRegister chunkRegister = new ChunkRegister(this, chunk);
-        this.chunks.put(chunkRegister.getChunkUUID(), chunkRegister);
-        return chunkRegister;
+        synchronized (this.chunks) {
+            ChunkRegister chunkRegister = new ChunkRegister(this, chunk);
+            this.chunks.put(chunkRegister.getChunkUUID(), chunkRegister);
+            return chunkRegister;
+        }
     }
 
     public Optional<ChunkRegister> getChunk(Chunk chunk) {
-        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
-        return Optional.ofNullable(this.chunks.get(chunkUUID));
+        synchronized (this.chunks) {
+            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
+            return Optional.ofNullable(this.chunks.get(chunkUUID));
+        }
     }
 
     public Optional<ChunkRegister> getChunk(ChunkUUID chunkUUID) {
-        return Optional.ofNullable(this.chunks.get(chunkUUID));
+        synchronized (this.chunks) {
+            return Optional.ofNullable(this.chunks.get(chunkUUID));
+        }
     }
 
     public ChunkRegister removeChunk(Chunk chunk) {
-        ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
-        return this.chunks.remove(chunkUUID);
+        synchronized (this.chunks) {
+            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
+            return this.chunks.remove(chunkUUID);
+        }
     }
 
     public ChunkRegister unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
-        Optional<ChunkRegister> chunkRegisterOptional = this.getChunk(chunk);
-        if (chunkRegisterOptional.isPresent()) {
-            ChunkRegister chunkRegister = chunkRegisterOptional.get();
-            chunkRegister.unload(true, entitiesArray);
-            return this.chunks.remove(chunkRegister.getChunkUUID());
+        synchronized (this.chunks) {
+            Optional<ChunkRegister> chunkRegisterOptional = this.getChunk(chunk);
+            if (chunkRegisterOptional.isPresent()) {
+                ChunkRegister chunkRegister = chunkRegisterOptional.get();
+                chunkRegister.unload(true, entitiesArray);
+                return this.chunks.remove(chunkRegister.getChunkUUID());
+            }
+            return null;
         }
-        return null;
     }
 
     public boolean canBeUnloaded() {
-        Iterator<ChunkRegister> chunkIterator = this.chunks.values().iterator();
-        while (chunkIterator.hasNext()) {
-            ChunkRegister chunkRegister = chunkIterator.next();
-            if (!chunkRegister.getChunk().isLoaded()) {
-                chunkRegister.unload(false, null);
-                chunkIterator.remove();
+        synchronized (this.chunks) {
+            Iterator<ChunkRegister> chunkIterator = this.chunks.values().iterator();
+            while (chunkIterator.hasNext()) {
+                ChunkRegister chunkRegister = chunkIterator.next();
+                if (!chunkRegister.getChunk().isLoaded()) {
+                    chunkRegister.unload(false, null);
+                    chunkIterator.remove();
+                }
             }
+            return this.chunks.isEmpty();
         }
-        return this.chunks.isEmpty();
     }
 
     public void saveChunks() {
-        for (ChunkRegister chunk : this.chunks.values())
-            if (chunk.getChunk().isLoaded()) {
-                chunk.savePopulation(true, Arrays.stream(chunk.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
-            } else
-                chunk.savePopulation(false, null);
+        synchronized (this.chunks) {
+            for (ChunkRegister chunk : this.chunks.values())
+                if (chunk.getChunk().isLoaded()) {
+                    chunk.savePopulation(true, Arrays.stream(chunk.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
+                } else
+                    chunk.savePopulation(false, null);
+        }
     }
 
     public boolean isBlockStored(Block block) {
@@ -194,11 +214,6 @@ public class RegionRegister implements CoruptedDataFallback {
 
     public CompoundTag createStoredEntity(UUID uuid) {
         return this.register.createStoredEntityInternal(uuid);
-    }
-
-    public RegionRegister setRegionTag(RegionCompoundTag tag) {
-        this.regionTag = tag;
-        return this;
     }
 
     @Override

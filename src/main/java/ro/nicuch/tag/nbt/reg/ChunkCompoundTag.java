@@ -9,8 +9,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * A compound tag.
@@ -23,12 +21,12 @@ public final class ChunkCompoundTag implements Tag {
     /**
      * The map of blocks tags.
      */
-    private final ConcurrentMap<BlockUUID, CompoundTag> blocks = new ConcurrentHashMap<>();
+    private final Map<BlockUUID, CompoundTag> blocks = new HashMap<>();
 
     /**
      * The map of entities tags.
      */
-    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>();
+    private final Map<UUID, CompoundTag> entities = new HashMap<>();
 
     private final CompoundTag chunktag = new CompoundTag();
 

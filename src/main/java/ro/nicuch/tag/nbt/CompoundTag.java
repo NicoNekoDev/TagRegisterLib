@@ -6,12 +6,7 @@ import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.*;
 import java.util.function.BiConsumer;
 
 /**
@@ -25,7 +20,7 @@ public final class CompoundTag implements CollectionTag {
     /**
      * The map of tags.
      */
-    private final ConcurrentMap<String, Tag> tags = new ConcurrentHashMap<>();
+    private final Map<String, Tag> tags = Collections.synchronizedMap(new HashMap<>());
 
     /**
      * Clear the tag.

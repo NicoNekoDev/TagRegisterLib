@@ -27,7 +27,11 @@ public class ChunkRegister {
     }
 
     public ChunkRegister(RegionRegister register, Chunk chunk) {
-        this.uuid = new ChunkUUID(chunk.getX(), chunk.getZ());
+        this(register, chunk, new ChunkUUID(chunk.getX(), chunk.getZ()));
+    }
+
+    public ChunkRegister(RegionRegister register, Chunk chunk, ChunkUUID uuid) {
+        this.uuid = uuid;
         this.register = register;
         this.chunk = chunk;
         RegionCompoundTag regionTag = register.getRegionTag();
@@ -63,46 +67,54 @@ public class ChunkRegister {
     }
 
     public void savePopulation(boolean checkEntities, Set<UUID> entities) {
-        WorldRegister worldRegister = this.register.getWorldRegister();
-        if (checkEntities) {
-            this.chunkTag.clearEntities();
-            for (UUID uuid : entities) {
-                worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
-                    if (!compoundTag.isEmpty())
-                        this.chunkTag.putEntity(uuid, compoundTag);
-                });
-            }
-            this.entities.clear(); // clean-up entities that doesn't exist
-            this.entities.addAll(entities); // these are the new entities in that chunk
-        } else {
-            for (UUID uuid : this.entities) {
-                if (worldRegister.isEntityStoredInternal(uuid)) {
-                    this.chunkTag.putEntity(uuid, worldRegister.unloadEntityInternal(uuid));
+        synchronized (this.chunkTag) {
+            WorldRegister worldRegister = this.register.getWorldRegister();
+            if (checkEntities) {
+                this.chunkTag.clearEntities();
+                for (UUID uuid : entities) {
+                    worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
+                        if (!compoundTag.isEmpty())
+                            this.chunkTag.putEntity(uuid, compoundTag);
+                    });
+                }
+                this.entities.clear(); // clean-up entities that doesn't exist
+                this.entities.addAll(entities); // these are the new entities in that chunk
+            } else {
+                for (UUID uuid : this.entities) {
+                    if (worldRegister.isEntityStoredInternal(uuid)) {
+                        this.chunkTag.putEntity(uuid, worldRegister.unloadEntityInternal(uuid));
+                    }
                 }
             }
+            RegionCompoundTag regionTag = this.register.getRegionTag();
+            if (!this.chunkTag.isEmpty(true))
+                regionTag.putChunkCompound(this.uuid, this.chunkTag);
+            else if (regionTag.containsChunkCompounds(uuid))
+                regionTag.removeChunkCompound(uuid);
         }
-        RegionCompoundTag regionTag = this.register.getRegionTag();
-        if (!this.chunkTag.isEmpty(true))
-            regionTag.putChunkCompound(this.uuid, this.chunkTag);
-        else if (regionTag.containsChunkCompounds(uuid))
-            regionTag.removeChunkCompound(uuid);
     }
 
     public boolean isBlockStored(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block);
-        return this.chunkTag.containsBlock(blockUUID);
+        synchronized (this.chunkTag) {
+            BlockUUID blockUUID = new BlockUUID(block);
+            return this.chunkTag.containsBlock(blockUUID);
+        }
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block);
-        return Optional.ofNullable(this.chunkTag.getBlock(blockUUID));
+        synchronized (this.chunkTag) {
+            BlockUUID blockUUID = new BlockUUID(block);
+            return Optional.ofNullable(this.chunkTag.getBlock(blockUUID));
+        }
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        BlockUUID blockUUID = new BlockUUID(block);
-        CompoundTag tag = new CompoundTag();
-        this.chunkTag.putBlock(blockUUID, tag);
-        return tag;
+        synchronized (this.chunkTag) {
+            BlockUUID blockUUID = new BlockUUID(block);
+            CompoundTag tag = new CompoundTag();
+            this.chunkTag.putBlock(blockUUID, tag);
+            return tag;
+        }
     }
 
     public Set<UUID> getStoredEntitiesOnThisChunk() {
@@ -143,7 +155,9 @@ public class ChunkRegister {
     }
 
     public ChunkCompoundTag getChunkTag() {
-        return this.chunkTag;
+        synchronized (this.chunkTag) {
+            return this.chunkTag;
+        }
     }
 
     @Override

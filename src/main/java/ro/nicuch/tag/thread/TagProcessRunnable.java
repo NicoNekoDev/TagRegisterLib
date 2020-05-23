@@ -3,10 +3,10 @@ package ro.nicuch.tag.thread;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class TagProcessRunnable implements Runnable {
-    private static final ConcurrentLinkedQueue<TagRunnable> processes = new ConcurrentLinkedQueue<>();
+    private static final LinkedBlockingQueue<TagRunnable> processes = new LinkedBlockingQueue<>();
 
     // ASYNC CALL
     @Override
