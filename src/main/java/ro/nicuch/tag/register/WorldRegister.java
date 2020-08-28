@@ -1,16 +1,10 @@
 package ro.nicuch.tag.register;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.tag.TagRegister;
-import ro.nicuch.tag.events.WorldTagLoadEvent;
-import ro.nicuch.tag.fallback.CoruptedDataFallback;
-import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
-import ro.nicuch.tag.nbt.Tag;
 import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.RegionUUID;
@@ -18,15 +12,19 @@ import ro.nicuch.tag.wrapper.RegionUUID;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-public class WorldRegister implements CoruptedDataFallback {
+public class WorldRegister {
     private CompoundTag worldTag;
     private final File worldFile;
     private final File worldDataFolder;
     private final World world;
-    private final Map<RegionUUID, RegionRegister> regions = new HashMap<>();
-    private final Map<UUID, CompoundTag> entities = new HashMap<>();
+    private final ConcurrentMap<RegionUUID, RegionRegister> regions = new ConcurrentHashMap<>();
+    private final Map<RegionUUID, ReentrantLock> regionsLock = Collections.synchronizedMap(new WeakHashMap<>());
+    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>();
 
     public WorldRegister(World world) {
         this.world = world;
@@ -45,8 +43,14 @@ public class WorldRegister implements CoruptedDataFallback {
                 e.printStackTrace();
             }
         }
-        Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
-                Bukkit.getPluginManager().callEvent(new WorldTagLoadEvent(this, this.worldTag)));
+    }
+
+    private ReentrantLock getRegionLock(RegionUUID regionUUID) {
+        if (this.regionsLock.containsKey(regionUUID))
+            return this.regionsLock.get(regionUUID);
+        ReentrantLock lock = new ReentrantLock();
+        regionsLock.put(regionUUID, lock);
+        return lock;
     }
 
     public File getDirectory() {
@@ -73,7 +77,6 @@ public class WorldRegister implements CoruptedDataFallback {
         } catch (IOException ioe) {
             ioe.printStackTrace();
             System.out.println("(Writing) " + this.world.getName() + "'s level file is corupted.");
-            CoruptedDataManager.fallbackOperation(this);
         }
     }
 
@@ -86,30 +89,62 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public boolean isRegionLoaded(Chunk chunk) {
-        synchronized (this.regions) {
-            return this.regions.containsKey(RegionUUID.fromChunk(chunk));
-        }
+        return this.regions.containsKey(RegionUUID.fromChunk(chunk));
     }
 
     public RegionRegister loadRegion(Chunk chunk) {
-        synchronized (this.regions) {
-            RegionRegister region = new RegionRegister(this, chunk);
-            this.regions.put(region.getRegionUUID(), region);
+        RegionUUID regionUUID = RegionUUID.fromChunk(chunk);
+        ReentrantLock lock = this.getRegionLock(regionUUID);
+        lock.lock();
+        try {
+            RegionRegister region = new RegionRegister(this, regionUUID);
+            this.regions.put(regionUUID, region);
             return region;
+        } finally {
+            lock.unlock();
         }
     }
 
     public Optional<RegionRegister> getRegion(Chunk chunk) {
-        synchronized (this.regions) {
-            return Optional.ofNullable(this.regions.get(RegionUUID.fromChunk(chunk)));
+        RegionUUID regionUUID = RegionUUID.fromChunk(chunk);
+        ReentrantLock lock = this.getRegionLock(regionUUID);
+        lock.lock();
+        try {
+            return Optional.ofNullable(this.regions.get(regionUUID));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public RegionRegister getRegionUnsafe(Chunk chunk) {
+        RegionUUID regionUUID = RegionUUID.fromChunk(chunk);
+        ReentrantLock lock = this.getRegionLock(regionUUID);
+        lock.lock();
+        try {
+            return this.regions.get(regionUUID);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public RegionRegister getOrLoadRegion(Chunk chunk) {
+        RegionUUID regionUUID = RegionUUID.fromChunk(chunk);
+        ReentrantLock lock = this.getRegionLock(regionUUID);
+        lock.lock();
+        try {
+            if (this.regions.containsKey(regionUUID))
+                return this.regions.get(regionUUID);
+            RegionRegister region = new RegionRegister(this, regionUUID);
+            this.regions.put(regionUUID, region);
+            return region;
+        } finally {
+            lock.unlock();
         }
     }
 
     public CompoundTag loadEntityInternal(UUID uuid, CompoundTag tag) {
-        synchronized (this.entities) {
-            this.entities.put(uuid, tag);
-            return tag;
-        }
+        this.entities.put(uuid, tag);
+        return tag;
     }
 
     public CompoundTag createStoredEntityInternal(UUID uuid) {
@@ -117,106 +152,125 @@ public class WorldRegister implements CoruptedDataFallback {
     }
 
     public boolean isEntityStoredInternal(UUID uuid) {
-        synchronized (this.entities) {
-            return this.entities.containsKey(uuid);
+        return this.entities.containsKey(uuid);
+    }
+
+    public CompoundTag getOrCreateEntityInternal(UUID uuid) {
+        if (this.entities.containsKey(uuid)) {
+            return this.entities.get(uuid);
         }
+        CompoundTag entityTag = new CompoundTag();
+        this.entities.put(uuid, entityTag);
+        return entityTag;
     }
 
     public CompoundTag unloadEntityInternal(UUID uuid) {
-        synchronized (this.entities) {
-            return this.entities.remove(uuid);
-        }
+        return this.entities.remove(uuid);
     }
 
     public Optional<CompoundTag> getStoredEntityInternal(UUID uuid) {
-        synchronized (this.entities) {
-            return Optional.ofNullable(this.entities.get(uuid));
-        }
+        return Optional.ofNullable(this.entities.get(uuid));
+    }
+
+    public CompoundTag getStoredEntityInternalUnsafe(UUID uuid) {
+        return this.entities.get(uuid);
     }
 
     public void tryUnloading() {
-        synchronized (this.regions) {
-            Iterator<RegionRegister> regionIterator = this.regions.values().iterator();
-            while (regionIterator.hasNext()) {
-                RegionRegister regionRegister = regionIterator.next();
+        Iterator<Map.Entry<RegionUUID, RegionRegister>> regionsIterator = this.regions.entrySet().iterator();
+        while (regionsIterator.hasNext()) {
+            Map.Entry<RegionUUID, RegionRegister> entry = regionsIterator.next();
+            RegionUUID regionUUID = entry.getKey();
+            ReentrantLock lock = this.getRegionLock(regionUUID);
+            lock.lock();
+            try {
+                RegionRegister regionRegister = entry.getValue();
                 if (regionRegister.canBeUnloaded()) {
-                    regionRegister.writeRegionFile();
-                    regionRegister.getRegionTag().close(); // close cache
-                    regionIterator.remove();
+                    regionRegister.getRegionFile().commit(); // commit cache
+                    regionRegister.getRegionFile().close(); // close cache
+                    regionsIterator.remove();
                 }
+            } finally {
+                lock.unlock();
             }
         }
-        synchronized (this.entities) {
-            Set<UUID> worldEntities = this.world.getEntities().stream().map(Entity::getUniqueId).collect(Collectors.toSet());
-            for (UUID uuid : this.entities.keySet()) {
-                if (!worldEntities.contains(uuid))
-                    this.entities.remove(uuid);
+        /*Iterator<RegionRegister> regionIterator = this.regions.values().iterator();
+        while (regionIterator.hasNext()) {
+            RegionRegister regionRegister = regionIterator.next();
+            if (regionRegister.canBeUnloaded()) {
+                regionRegister.getRegionTag().commit(); // commit cache
+                regionRegister.getRegionTag().close(); // close cache
+                regionIterator.remove();
             }
-            worldEntities.clear(); // manual gc
-        }
+        }*/
+        Set<UUID> worldEntities = this.world.getEntities().stream().map(Entity::getUniqueId).collect(Collectors.toSet());
+        this.entities.keySet().removeIf(uuid -> !worldEntities.contains(uuid));
+        worldEntities.clear(); // manual gc
     }
 
     public void saveRegions() {
-        synchronized (this.regions) {
-            for (RegionRegister region : this.regions.values()) {
-                region.saveChunks();
-                region.writeRegionFile();
+        for (Map.Entry<RegionUUID, RegionRegister> entry : this.regions.entrySet()) {
+            RegionUUID regionUUID = entry.getKey();
+            ReentrantLock lock = this.getRegionLock(regionUUID);
+            lock.lock();
+            try {
+                RegionRegister regionRegister = entry.getValue();
+                regionRegister.saveChunks();
+                regionRegister.getRegionFile().commit(); //commit to files
+            } finally {
+                lock.unlock();
             }
-            this.writeWorldFile();
         }
+        /*for (RegionRegister region : this.regions.values()) {
+            region.saveChunks();
+            region.getRegionTag().commit(); //commit to files
+        }*/
+        this.writeWorldFile();
     }
 
     public boolean isBlockStored(Block block) {
-        return this.getRegion(block.getChunk()).orElseGet(() -> this.loadRegion(block.getChunk())).isBlockStored(block);
+        return this.getOrLoadRegion(block.getChunk()).isBlockStored(block);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        return this.getRegion(block.getChunk()).orElseGet(() -> this.loadRegion(block.getChunk())).getStoredBlock(block);
+        return this.getOrLoadRegion(block.getChunk()).getStoredBlock(block);
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        return this.getRegion(block.getChunk()).orElseGet(() -> this.loadRegion(block.getChunk())).createStoredBlock(block);
+        return this.getOrLoadRegion(block.getChunk()).createStoredBlock(block);
+    }
+
+    public CompoundTag getOrCreateBlock(Block block) {
+        return this.getOrLoadRegion(block.getChunk()).getOrCreateBlock(block);
     }
 
     public boolean isEntityStored(Entity entity) {
-        Chunk realChunk = entity.getLocation().getChunk();
-        RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
-        return chunk.isEntityStored(entity.getUniqueId());
+        Chunk chunk = entity.getLocation().getChunk();
+        return this.getOrLoadRegion(chunk).getOrLoadChunk(chunk).isEntityStored(entity.getUniqueId());
     }
 
     public Optional<CompoundTag> getStoredEntity(Entity entity) {
-        Chunk realChunk = entity.getLocation().getChunk();
-        RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
-        return chunk.getStoredEntity(entity.getUniqueId());
+        Chunk chunk = entity.getLocation().getChunk();
+        return this.getOrLoadRegion(chunk).getOrLoadChunk(chunk).getStoredEntity(entity.getUniqueId());
     }
 
     public CompoundTag createStoredEntity(Entity entity) {
-        Chunk realChunk = entity.getLocation().getChunk();
-        RegionRegister region = this.getRegion(realChunk).orElseGet(() -> this.loadRegion(realChunk));
-        ChunkRegister chunk = region.getChunk(realChunk).orElseGet(() -> region.loadChunk(realChunk));
-        return chunk.createStoredEntity(entity.getUniqueId());
+        Chunk chunk = entity.getLocation().getChunk();
+        return this.getOrLoadRegion(chunk).getOrLoadChunk(chunk).createStoredEntity(entity.getUniqueId());
     }
 
-    @Override
-    public String getCoruptedDataId() {
-        return this.world.getName() + "_world";
+    public CompoundTag getOrCreateEntity(Entity entity) {
+        Chunk chunk = entity.getLocation().getChunk();
+        return this.getOrLoadRegion(chunk).getOrLoadChunk(chunk).getOrCreateEntity(entity.getUniqueId());
     }
 
-    @Override
-    public File getCoruptedDataFile() {
-        return this.worldFile;
+    public CompoundTag getStoredEntityUnsafe(Entity entity) {
+        Chunk chunk = entity.getLocation().getChunk();
+        return this.getOrLoadRegion(chunk).getOrLoadChunk(chunk).getStoredEntityUnsafe(entity.getUniqueId());
     }
 
-    @Override
-    public Tag getCoruptedDataCompoundTag() {
-        return this.worldTag;
-    }
-
-    @Override
-    public String getWorldName() {
-        return this.world.getName();
+    public CompoundTag getStoredBlockUnsafe(Block block) {
+        return this.getOrLoadRegion(block.getChunk()).getStoredBlockUnsafe(block);
     }
 
     public World getWorldInstance() {

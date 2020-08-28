@@ -1,8 +1,5 @@
 package ro.nicuch.tag.nbt;
 
-import ro.nicuch.tag.nbt.reg.ChunkCompoundTag;
-import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -20,7 +17,7 @@ public final class CompoundTag implements CollectionTag {
     /**
      * The map of tags.
      */
-    private final Map<String, Tag> tags = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, Tag> tags = new HashMap<>();
 
     /**
      * Clear the tag.
@@ -529,72 +526,17 @@ public final class CompoundTag implements CollectionTag {
     }
 
     /**
-     * Inserts a compound.
-     *
-     * @param key   the key
-     * @param value the value
-     */
-    public ChunkCompoundTag putRegionCompound(final String key, final ChunkCompoundTag value) {
-        this.tags.put(key, value);
-        return value;
-    }
-
-    /**
-     * Gets a compound.
-     *
-     * @param key          the key
-     * @param defaultValue the default value
-     * @return the compound, or {@code defaultValue} if this compound does not contain a compound tag
-     * with the specified key, or has a tag with a different type
-     */
-    public ChunkCompoundTag getRegionCompound(final String key, final ChunkCompoundTag defaultValue) {
-        if (this.contains(key, TagType.REGION_COMPOUND)) {
-            return (ChunkCompoundTag) this.tags.get(key);
-        }
-        return defaultValue;
-    }
-
-    /**
      * Gets a compound.
      *
      * @param key the key
      * @return the compound, or a new compound if this compound does not contain a compound tag
      * with the specified key, or has a tag with a different type
      */
-    public ChunkCompoundTag getRegionCompound(final String key) {
-        if (this.contains(key, TagType.REGION_COMPOUND)) {
+    public ChunkCompoundTag getChunkCompound(final String key) {
+        if (this.contains(key, TagType.CHUNK_COMPOUND)) {
             return (ChunkCompoundTag) this.tags.get(key);
         }
         return new ChunkCompoundTag();
-    }
-
-    /**
-     * Gets a compound.
-     *
-     * @param key          the key
-     * @param defaultValue the default value
-     * @return the compound, or {@code defaultValue} if this compound does not contain a compound tag
-     * with the specified key, or has a tag with a different type
-     */
-    public RegionCompoundTag getChunkCompound(final String key, final RegionCompoundTag defaultValue) {
-        if (this.contains(key, TagType.CHUNK_COMPOUND)) {
-            return (RegionCompoundTag) this.tags.get(key);
-        }
-        return defaultValue;
-    }
-
-    /**
-     * Gets a compound.
-     *
-     * @param key the key
-     * @return the compound, or a new compound if this compound does not contain a compound tag
-     * with the specified key, or has a tag with a different type
-     */
-    public RegionCompoundTag getChunkCompound(final String key) {
-        if (this.contains(key, TagType.CHUNK_COMPOUND)) {
-            return (RegionCompoundTag) this.tags.get(key);
-        }
-        return new RegionCompoundTag();
     }
 
     /**
@@ -843,16 +785,6 @@ public final class CompoundTag implements CollectionTag {
      */
     public boolean containsCompound(final String key) {
         return this.contains(key, TagType.COMPOUND);
-    }
-
-    /**
-     * Checks if this compound has a compound tag with the specified key.
-     *
-     * @param key the key
-     * @return {@code true} if this compound has a compound tag with the specified key
-     */
-    public boolean containsRegionCompound(final String key) {
-        return this.contains(key, TagType.REGION_COMPOUND);
     }
 
     /**

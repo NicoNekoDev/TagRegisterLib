@@ -9,7 +9,6 @@ import ro.nicuch.tag.register.RegionRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,15 +26,13 @@ public class TagProcessUnload implements TagRunnable {
     public void run() {
         World world = this.event.getWorld();
         Chunk chunk = this.event.getChunk();
-        Optional<WorldRegister> optionalWorldRegister = TagRegister.getWorld(world);
-        if (optionalWorldRegister.isEmpty())
+        if (!TagRegister.isWorldLoaded(world))
             return;
-        WorldRegister worldRegister = optionalWorldRegister.get();
-        Optional<RegionRegister> optionalRegionRegister = worldRegister.getRegion(chunk);
-        if (optionalRegionRegister.isEmpty())
+        WorldRegister worldRegister = TagRegister.getWorldUnsafe(world);
+        if (!worldRegister.isRegionLoaded(chunk))
             return;
-        RegionRegister regionRegister = optionalRegionRegister.get();
-        if (regionRegister.isChunkNotLoaded(chunk))
+        RegionRegister regionRegister = worldRegister.getRegionUnsafe(chunk);
+        if (!regionRegister.isChunkLoaded(chunk))
             return;
         regionRegister.unloadChunk(chunk, this.entitiesSync);
         this.entitiesSync.clear();

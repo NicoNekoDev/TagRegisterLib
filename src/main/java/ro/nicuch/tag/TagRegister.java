@@ -1,21 +1,30 @@
 package ro.nicuch.tag;
 
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import ro.nicuch.tag.nbt.CompoundTag;
-import ro.nicuch.tag.register.PlayerRegister;
 import ro.nicuch.tag.register.WorldRegister;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 public class TagRegister {
-
+    private final static ConcurrentMap<String, WorldRegister> worlds = new ConcurrentHashMap<>();
+    private final static Map<String, ReentrantLock> worldsLock = Collections.synchronizedMap(new WeakHashMap<>());
     private static boolean debug;
+
+    private static ReentrantLock getWorldLock(String world) {
+        if (worldsLock.containsKey(world))
+            return worldsLock.get(world);
+        ReentrantLock lock = new ReentrantLock();
+        worldsLock.put(world, lock);
+        return lock;
+    }
 
     public static boolean isDebugging() {
         return debug;
@@ -25,107 +34,145 @@ public class TagRegister {
         debug = !debug;
     }
 
-    private final static Map<String, WorldRegister> worlds = Collections.synchronizedMap(new HashMap<>());
-    private final static Map<UUID, PlayerRegister> players = Collections.synchronizedMap(new HashMap<>());
-
-    public static Optional<PlayerRegister> getPlayerRegister(UUID uuid) {
-        if (players.containsKey(uuid))
-            return Optional.ofNullable(players.get(uuid));
-        PlayerRegister playerRegister = new PlayerRegister(uuid);
-        players.put(uuid, playerRegister);
-        return Optional.of(playerRegister);
-    }
-
-    public static Optional<CompoundTag> getPlayerTag(UUID uuid) {
-        return Optional.ofNullable(players.get(uuid).getPlayerTag());
-    }
-
-    public static boolean isPlayerStored(UUID uuid) {
-        return PlayerRegister.isPlayerStored(uuid);
-    }
-
-    public static Optional<PlayerRegister> getPlayerRegister(OfflinePlayer player) {
-        return getPlayerRegister(player.getUniqueId());
-    }
-
     public static boolean isStored(Entity entity) {
-        if (entity instanceof Player)
-            return isPlayerStored(entity.getUniqueId());
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).isEntityStored(entity);
+        return getOrLoadWorld(entity.getWorld()).isEntityStored(entity);
     }
 
     public static boolean isStored(Block block) {
-        return getWorld(block.getWorld()).orElseGet(() -> loadWorld(block.getWorld())).isBlockStored(block);
+        return getOrLoadWorld(block.getWorld()).isBlockStored(block);
     }
 
     public static Optional<CompoundTag> getStored(Entity entity) {
-        if (entity instanceof Player)
-            return getPlayerTag(entity.getUniqueId());
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).getStoredEntity(entity);
+        return getOrLoadWorld(entity.getWorld()).getStoredEntity(entity);
     }
 
     public static Optional<CompoundTag> getStored(Block block) {
-        return getWorld(block.getWorld()).orElseGet(() -> loadWorld(block.getWorld())).getStoredBlock(block);
+        return getOrLoadWorld(block.getWorld()).getStoredBlock(block);
+    }
+
+    public static CompoundTag getStoredUnsafe(Entity entity) {
+        return getOrLoadWorld(entity.getWorld()).getStoredEntityUnsafe(entity);
+    }
+
+    public static CompoundTag getStoredUnsafe(Block block) {
+        return getOrLoadWorld(block.getWorld()).getStoredBlockUnsafe(block);
     }
 
     public static CompoundTag create(Entity entity) {
-        if (entity instanceof Player)
-            return getPlayerRegister(entity.getUniqueId()).orElseGet(() -> players.put(entity.getUniqueId(), new PlayerRegister(entity.getUniqueId()))).getPlayerTag(); //Might not be null, ever
-        return getWorld(entity.getWorld()).orElseGet(() -> loadWorld(entity.getWorld())).createStoredEntity(entity);
+        return getOrLoadWorld(entity.getWorld()).createStoredEntity(entity);
+    }
+
+    public static CompoundTag getOrCreateEntity(Entity entity) {
+        return getOrLoadWorld(entity.getWorld()).getOrCreateEntity(entity);
     }
 
     public static CompoundTag create(Block block) {
-        return getWorld(block.getWorld()).orElseGet(() -> loadWorld(block.getWorld())).createStoredBlock(block);
+        return getOrLoadWorld(block.getWorld()).createStoredBlock(block);
+    }
+
+    public static CompoundTag getOrCreateBlock(Block block) {
+        return getOrLoadWorld(block.getWorld()).getOrCreateBlock(block);
     }
 
     public static boolean isWorldLoaded(World world) {
-        synchronized (worlds) {
-            return worlds.containsKey(world.getName());
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
+            return worlds.containsKey(worldName);
+        } finally {
+            lock.unlock();
         }
     }
 
     public static WorldRegister loadWorld(World world) {
-        synchronized (worlds) {
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
             WorldRegister wr = new WorldRegister(world);
-            worlds.put(world.getName(), wr);
+            worlds.put(worldName, wr);
             return wr;
+        } finally {
+            lock.unlock();
         }
     }
 
     public static WorldRegister unloadWorld(World world) {
-        synchronized (worlds) {
-            return worlds.remove(world.getName());
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
+            return worlds.remove(worldName);
+        } finally {
+            lock.unlock();
         }
     }
 
     public static Optional<WorldRegister> getWorld(World world) {
-        synchronized (worlds) {
-            return Optional.ofNullable(worlds.get(world.getName()));
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
+            return Optional.ofNullable(worlds.get(worldName));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public static WorldRegister getWorldUnsafe(World world) {
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
+            return worlds.get(worldName);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public static WorldRegister getOrLoadWorld(World world) {
+        String worldName = world.getName();
+        ReentrantLock lock = getWorldLock(worldName);
+        lock.lock();
+        try {
+            if (worlds.containsKey(world.getName()))
+                return worlds.get(world.getName());
+            WorldRegister wr = new WorldRegister(world);
+            worlds.put(world.getName(), wr);
+            return wr;
+        } finally {
+            lock.unlock();
         }
     }
 
     public static void tryUnloading() {
-        synchronized (worlds) {
-            for (WorldRegister world : worlds.values())
-                world.tryUnloading();
-            for (UUID uuid : players.keySet()) {
-                OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
-                if (offlinePlayer.isOnline())
-                    continue;
-                PlayerRegister playerRegister = players.get(uuid);
-                players.remove(uuid);
-                playerRegister.writePlayerFile();
+        for (Map.Entry<String, WorldRegister> entry : worlds.entrySet()) {
+            ReentrantLock lock = getWorldLock(entry.getKey());
+            lock.lock();
+            try {
+                entry.getValue().tryUnloading();
+            } finally {
+                lock.unlock();
             }
         }
+        /*for (WorldRegister world : worlds.values()) {
+            world.tryUnloading();
+        }*/
     }
 
     public static void saveAll() {
-        synchronized (worlds) {
-            for (WorldRegister world : worlds.values())
-                world.saveRegions();
-            for (PlayerRegister playerRegister : players.values())
-                playerRegister.writePlayerFile();
+        for (Map.Entry<String, WorldRegister> entry : worlds.entrySet()) {
+            ReentrantLock lock = getWorldLock(entry.getKey());
+            lock.lock();
+            try {
+                entry.getValue().saveRegions();
+            } finally {
+                lock.unlock();
+            }
         }
+        /*for (WorldRegister world : worlds.values())
+            world.saveRegions();*/
     }
 
     public static Logger getLogger() {

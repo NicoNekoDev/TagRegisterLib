@@ -3,12 +3,3 @@ version: ${project.version}
 author: nicuch
 main: ro.nicuch.tag.TagPlugin
 api-version: 1.13
-commands:
-  trl_backup:
-    description: Backup the corupted data.
-  trl_overwrite:
-    description: Overwrite the corupted data.
-  trl_reset:
-    description: Reset the corupted data.
-  trl_debug:
-    description: Debugs the plugin.

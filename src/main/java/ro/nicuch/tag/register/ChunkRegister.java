@@ -1,14 +1,11 @@
 package ro.nicuch.tag.register;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.tag.TagRegister;
-import ro.nicuch.tag.events.ChunkTagLoadEvent;
-import ro.nicuch.tag.nbt.reg.ChunkCompoundTag;
+import ro.nicuch.tag.nbt.ChunkCompoundTag;
 import ro.nicuch.tag.nbt.CompoundTag;
-import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
+import ro.nicuch.tag.nbt.region.RegionFile;
 import ro.nicuch.tag.wrapper.BlockUUID;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
@@ -34,7 +31,7 @@ public class ChunkRegister {
         this.uuid = uuid;
         this.register = register;
         this.chunk = chunk;
-        RegionCompoundTag regionTag = register.getRegionTag();
+        RegionFile regionTag = register.getRegionFile();
         if (regionTag.containsChunkCompounds(this.uuid))
             this.chunkTag = regionTag.getChunkCompound(this.uuid);
         else {
@@ -45,8 +42,6 @@ public class ChunkRegister {
             register.getWorldRegister().loadEntityInternal(entityUUID, entitiesEntry.getValue());
             this.entities.add(entityUUID);
         }
-        Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
-                Bukkit.getPluginManager().callEvent(new ChunkTagLoadEvent(this, this.chunkTag)));
     }
 
     public Chunk getChunk() {
@@ -67,54 +62,60 @@ public class ChunkRegister {
     }
 
     public void savePopulation(boolean checkEntities, Set<UUID> entities) {
-        synchronized (this.chunkTag) {
-            WorldRegister worldRegister = this.register.getWorldRegister();
-            if (checkEntities) {
-                this.chunkTag.clearEntities();
-                for (UUID uuid : entities) {
-                    worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
-                        if (!compoundTag.isEmpty())
-                            this.chunkTag.putEntity(uuid, compoundTag);
-                    });
-                }
-                this.entities.clear(); // clean-up entities that doesn't exist
-                this.entities.addAll(entities); // these are the new entities in that chunk
-            } else {
-                for (UUID uuid : this.entities) {
-                    if (worldRegister.isEntityStoredInternal(uuid)) {
-                        this.chunkTag.putEntity(uuid, worldRegister.unloadEntityInternal(uuid));
-                    }
+        WorldRegister worldRegister = this.register.getWorldRegister();
+        if (checkEntities) {
+            this.chunkTag.clearEntities();
+            for (UUID uuid : entities) {
+                worldRegister.getStoredEntityInternal(uuid).ifPresent(compoundTag -> {
+                    if (!compoundTag.isEmpty())
+                        this.chunkTag.putEntity(uuid, compoundTag);
+                });
+            }
+            this.entities.clear(); // clean-up entities that doesn't exist
+            this.entities.addAll(entities); // these are the new entities in that chunk
+        } else {
+            for (UUID uuid : this.entities) {
+                if (worldRegister.isEntityStoredInternal(uuid)) {
+                    this.chunkTag.putEntity(uuid, worldRegister.unloadEntityInternal(uuid));
                 }
             }
-            RegionCompoundTag regionTag = this.register.getRegionTag();
-            if (!this.chunkTag.isEmpty(true))
-                regionTag.putChunkCompound(this.uuid, this.chunkTag);
-            else if (regionTag.containsChunkCompounds(uuid))
-                regionTag.removeChunkCompound(uuid);
         }
+        RegionFile regionTag = this.register.getRegionFile();
+        if (!this.chunkTag.isEmpty(true))
+            regionTag.putChunkCompound(this.uuid, this.chunkTag);
+        else if (regionTag.containsChunkCompounds(uuid))
+            regionTag.removeChunkCompound(uuid);
     }
 
     public boolean isBlockStored(Block block) {
-        synchronized (this.chunkTag) {
-            BlockUUID blockUUID = new BlockUUID(block);
-            return this.chunkTag.containsBlock(blockUUID);
-        }
+        BlockUUID blockUUID = new BlockUUID(block);
+        return this.chunkTag.containsBlock(blockUUID);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        synchronized (this.chunkTag) {
-            BlockUUID blockUUID = new BlockUUID(block);
-            return Optional.ofNullable(this.chunkTag.getBlock(blockUUID));
-        }
+        BlockUUID blockUUID = new BlockUUID(block);
+        return Optional.ofNullable(this.chunkTag.getBlock(blockUUID));
+    }
+
+    public CompoundTag getStoredBlockUnsafe(Block block) {
+        BlockUUID blockUUID = new BlockUUID(block);
+        return this.chunkTag.getBlock(blockUUID);
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        synchronized (this.chunkTag) {
-            BlockUUID blockUUID = new BlockUUID(block);
-            CompoundTag tag = new CompoundTag();
-            this.chunkTag.putBlock(blockUUID, tag);
-            return tag;
-        }
+        BlockUUID blockUUID = new BlockUUID(block);
+        CompoundTag tag = new CompoundTag();
+        this.chunkTag.putBlock(blockUUID, tag);
+        return tag;
+    }
+
+    public CompoundTag getOrCreateBlock(Block block) {
+        BlockUUID blockUUID = new BlockUUID(block);
+        if (this.chunkTag.containsBlock(blockUUID))
+            return this.chunkTag.getBlock(blockUUID);
+        CompoundTag tag = new CompoundTag();
+        this.chunkTag.putBlock(blockUUID, tag);
+        return tag;
     }
 
     public Set<UUID> getStoredEntitiesOnThisChunk() {
@@ -141,10 +142,20 @@ public class ChunkRegister {
         return this.register.getStoredEntity(uuid);
     }
 
+    public CompoundTag getStoredEntityUnsafe(UUID uuid) {
+        return this.register.getStoredEntityUnsafe(uuid);
+    }
+
     public CompoundTag createStoredEntity(UUID uuid) {
         this.refferenceEntity(uuid);
         return this.register.createStoredEntity(uuid);
     }
+
+    public CompoundTag getOrCreateEntity(UUID uuid) {
+        this.refferenceEntity(uuid);
+        return this.register.getOrCreateEntity(uuid);
+    }
+
 
     public void refferenceEntity(UUID uuid) {
         this.entities.add(uuid);

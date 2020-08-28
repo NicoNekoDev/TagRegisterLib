@@ -19,23 +19,23 @@ public class TagListener implements Listener {
         Bukkit.getScheduler().runTaskTimerAsynchronously((this.plugin = plugin), new TagProcessRunnable(), 1L, 1L);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void event(ChunkLoadEvent event) {
         TagProcessRunnable.addToLoad(event);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void event(ChunkUnloadEvent event) {
         TagProcessRunnable.addToUnload(event);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void event(WorldSaveEvent event) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
                 TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions());
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void event(WorldUnloadEvent event) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             TagRegister.getWorld(event.getWorld()).orElseGet(() -> TagRegister.loadWorld(event.getWorld())).saveRegions();
@@ -43,7 +43,7 @@ public class TagListener implements Listener {
         });
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.LOWEST)
     public void event(PlayerCommandPreprocessEvent event) {
         if (!event.getPlayer().isOp())
             return;

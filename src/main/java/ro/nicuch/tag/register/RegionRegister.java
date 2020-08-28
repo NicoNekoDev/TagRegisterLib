@@ -1,35 +1,36 @@
 package ro.nicuch.tag.register;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
-import ro.nicuch.tag.TagRegister;
-import ro.nicuch.tag.events.RegionTagLoadEvent;
-import ro.nicuch.tag.fallback.CoruptedDataFallback;
-import ro.nicuch.tag.fallback.CoruptedDataManager;
 import ro.nicuch.tag.nbt.CompoundTag;
-import ro.nicuch.tag.nbt.Tag;
-import ro.nicuch.tag.nbt.TagIO;
-import ro.nicuch.tag.nbt.TagType;
-import ro.nicuch.tag.nbt.reg.RegionCompoundTag;
+import ro.nicuch.tag.nbt.region.RegionFile;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-public class RegionRegister implements CoruptedDataFallback {
+public class RegionRegister {
     private final WorldRegister register;
-    private final Map<ChunkUUID, ChunkRegister> chunks = new HashMap<>();
+    private final ConcurrentMap<ChunkUUID, ChunkRegister> chunks = new ConcurrentHashMap<>();
+    private final Map<ChunkUUID, ReentrantLock> chunksLock = Collections.synchronizedMap(new WeakHashMap<>());
     private final int x;
     private final int z;
-    private final File regionFile;
-    private RegionCompoundTag regionTag;
-
+    private RegionFile regionFile;
     private final RegionUUID uuid;
+
+    private ReentrantLock getChunkLock(ChunkUUID chunkUUID) {
+        if (this.chunksLock.containsKey(chunkUUID))
+            return this.chunksLock.get(chunkUUID);
+        ReentrantLock lock = new ReentrantLock();
+        chunksLock.put(chunkUUID, lock);
+        return lock;
+    }
 
     public final RegionUUID getRegionUUID() {
         return this.uuid;
@@ -44,19 +45,13 @@ public class RegionRegister implements CoruptedDataFallback {
         this.register = register;
         this.x = uuid.getX();
         this.z = uuid.getZ();
-        this.regionFile = new File(register.getDirectory().getPath() + File.separator + "r." + x + "." + z + ".dat");
-        if (!this.regionFile.exists()) {
-            this.regionTag = new RegionCompoundTag();
-        } else {
-            try {
-                this.regionTag = (RegionCompoundTag) TagIO.readFile(this.regionFile, TagType.REGION_COMPOUND);
-            } catch (IOException | NullPointerException ioe) {
-                ioe.printStackTrace();
-                System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");
-            }
+        File regionFile = new File(register.getDirectory().getPath() + File.separator + "r." + x + "." + z + ".dat");
+        try {
+            this.regionFile = new RegionFile(regionFile, this.x, this.z);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("(Reading) This region is corupted. -> r." + x + "." + z + ".dat!!");
         }
-        Bukkit.getScheduler().runTask(TagRegister.getPlugin(), () ->
-                Bukkit.getPluginManager().callEvent(new RegionTagLoadEvent(this, this.regionTag)));
     }
 
     public RegionRegister(WorldRegister register, int x, int z) {
@@ -67,8 +62,8 @@ public class RegionRegister implements CoruptedDataFallback {
         return this.register;
     }
 
-    public RegionCompoundTag getRegionTag() {
-        return this.regionTag;
+    public RegionFile getRegionFile() {
+        return this.regionFile;
     }
 
     public int getX() {
@@ -79,124 +74,168 @@ public class RegionRegister implements CoruptedDataFallback {
         return this.z;
     }
 
-    protected void writeRegionFile() {
-        if (this.regionTag.isEmpty(true)) {
-            if (this.regionFile.exists())
-                this.regionFile.delete();
-            return;
-        }
-        if (!this.regionFile.exists()) {
-            try {
-                this.regionFile.createNewFile();
-                this.regionFile.setReadable(true, false);
-                this.regionFile.setWritable(true, false);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    public boolean isChunkLoaded(Chunk chunk) {
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
         try {
-            TagIO.writeFile(this.regionTag, this.regionFile);
-        } catch (IOException | NullPointerException ioe) {
-            ioe.printStackTrace();
-            System.out.println("(Writing) This region file is corupted. -> r." + x + "." + z + ".dat");
-            CoruptedDataManager.fallbackOperation(this);
+            return this.chunks.containsKey(chunkUUID);
+        } finally {
+            lock.unlock();
         }
     }
 
-    public boolean isChunkNotLoaded(Chunk chunk) {
-        synchronized (this.chunks) {
-            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
-            return !this.chunks.containsKey(chunkUUID);
+    public boolean isChunkLoaded(ChunkUUID chunkUUID) {
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
+            return this.chunks.containsKey(chunkUUID);
+        } finally {
+            lock.unlock();
         }
     }
 
-    public boolean isChunkNotLoaded(ChunkUUID chunkUUID) {
-        synchronized (this.chunks) {
-            return !this.chunks.containsKey(chunkUUID);
+    public ChunkRegister getOrLoadChunk(Chunk chunk) {
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
+            if (this.chunks.containsKey(chunkUUID))
+                return this.chunks.get(chunkUUID);
+            ChunkRegister chunkRegister = new ChunkRegister(this, chunk, chunkUUID);
+            this.chunks.put(chunkUUID, chunkRegister);
+            return chunkRegister;
+        } finally {
+            lock.unlock();
         }
     }
 
     public ChunkRegister loadChunk(Chunk chunk) {
-        synchronized (this.chunks) {
-            ChunkRegister chunkRegister = new ChunkRegister(this, chunk);
-            this.chunks.put(chunkRegister.getChunkUUID(), chunkRegister);
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
+            ChunkRegister chunkRegister = new ChunkRegister(this, chunk, chunkUUID);
+            this.chunks.put(chunkUUID, chunkRegister);
             return chunkRegister;
+        } finally {
+            lock.unlock();
         }
     }
 
     public Optional<ChunkRegister> getChunk(Chunk chunk) {
-        synchronized (this.chunks) {
-            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
             return Optional.ofNullable(this.chunks.get(chunkUUID));
+        } finally {
+            lock.unlock();
         }
     }
 
     public Optional<ChunkRegister> getChunk(ChunkUUID chunkUUID) {
-        synchronized (this.chunks) {
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
             return Optional.ofNullable(this.chunks.get(chunkUUID));
+        } finally {
+            lock.unlock();
         }
     }
 
     public ChunkRegister removeChunk(Chunk chunk) {
-        synchronized (this.chunks) {
-            ChunkUUID chunkUUID = new ChunkUUID(chunk.getX(), chunk.getZ());
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
             return this.chunks.remove(chunkUUID);
+        } finally {
+            lock.unlock();
         }
     }
 
-    public ChunkRegister unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
-        synchronized (this.chunks) {
-            Optional<ChunkRegister> chunkRegisterOptional = this.getChunk(chunk);
-            if (chunkRegisterOptional.isPresent()) {
-                ChunkRegister chunkRegister = chunkRegisterOptional.get();
-                chunkRegister.unload(true, entitiesArray);
-                return this.chunks.remove(chunkRegister.getChunkUUID());
-            }
-            return null;
+    public void unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
+        ChunkUUID chunkUUID = new ChunkUUID(chunk);
+        ReentrantLock lock = this.getChunkLock(chunkUUID);
+        lock.lock();
+        try {
+            ChunkRegister chunkRegister = this.chunks.get(chunkUUID);
+            chunkRegister.unload(true, entitiesArray);
+            this.chunks.remove(chunkUUID);
+        } finally {
+            lock.unlock();
         }
     }
 
     public boolean canBeUnloaded() {
-        if (this.regionTag.isCaching()) {
-            if (!this.regionTag.canChangeToCache())
-                this.regionTag.changeToMemory();
-        } else {
-            if (this.regionTag.canChangeToCache())
-                this.regionTag.changeToCache();
-        }
-        synchronized (this.chunks) {
-            Iterator<ChunkRegister> chunkIterator = this.chunks.values().iterator();
-            while (chunkIterator.hasNext()) {
-                ChunkRegister chunkRegister = chunkIterator.next();
+        Iterator<Map.Entry<ChunkUUID, ChunkRegister>> chunksIterator = this.chunks.entrySet().iterator();
+        while (chunksIterator.hasNext()) {
+            Map.Entry<ChunkUUID, ChunkRegister> entry = chunksIterator.next();
+            ChunkUUID chunkUUID = entry.getKey();
+            ReentrantLock lock = this.getChunkLock(chunkUUID);
+            lock.lock();
+            try {
+                ChunkRegister chunkRegister = entry.getValue();
                 if (!chunkRegister.getChunk().isLoaded()) {
                     chunkRegister.unload(false, null);
-                    chunkIterator.remove();
+                    chunksIterator.remove();
                 }
+            } finally {
+                lock.unlock();
             }
-            return this.chunks.isEmpty();
         }
+        /*Iterator<ChunkRegister> chunkIterator = this.chunks.values().iterator();
+        while (chunkIterator.hasNext()) {
+            ChunkRegister chunkRegister = chunkIterator.next();
+            if (!chunkRegister.getChunk().isLoaded()) {
+                chunkRegister.unload(false, null);
+                chunkIterator.remove();
+            }
+        }*/
+        return this.chunks.isEmpty();
     }
 
     public void saveChunks() {
-        synchronized (this.chunks) {
-            for (ChunkRegister chunk : this.chunks.values())
-                if (chunk.getChunk().isLoaded()) {
-                    chunk.savePopulation(true, Arrays.stream(chunk.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
+        for (Map.Entry<ChunkUUID, ChunkRegister> entry : this.chunks.entrySet()) {
+            ChunkUUID chunkUUID = entry.getKey();
+            ReentrantLock lock = this.getChunkLock(chunkUUID);
+            lock.lock();
+            try {
+                ChunkRegister chunkRegister = entry.getValue();
+                if (chunkRegister.getChunk().isLoaded()) {
+                    chunkRegister.savePopulation(true, Arrays.stream(chunkRegister.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
                 } else
-                    chunk.savePopulation(false, null);
+                    chunkRegister.savePopulation(false, null);
+            } finally {
+                lock.unlock();
+            }
         }
+        /*for (ChunkRegister chunk : this.chunks.values())
+            if (chunk.getChunk().isLoaded()) {
+                chunk.savePopulation(true, Arrays.stream(chunk.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet()));
+            } else
+                chunk.savePopulation(false, null);*/
     }
 
     public boolean isBlockStored(Block block) {
-        return this.getChunk(block.getChunk()).orElseGet(() -> this.loadChunk(block.getChunk())).isBlockStored(block);
+        return this.getOrLoadChunk(block.getChunk()).isBlockStored(block);
     }
 
     public Optional<CompoundTag> getStoredBlock(Block block) {
-        return this.getChunk(block.getChunk()).orElseGet(() -> this.loadChunk(block.getChunk())).getStoredBlock(block);
+        return this.getOrLoadChunk(block.getChunk()).getStoredBlock(block);
+    }
+
+    public CompoundTag getStoredBlockUnsafe(Block block) {
+        return this.getOrLoadChunk(block.getChunk()).getStoredBlockUnsafe(block);
     }
 
     public CompoundTag createStoredBlock(Block block) {
-        return this.getChunk(block.getChunk()).orElseGet(() -> this.loadChunk(block.getChunk())).createStoredBlock(block);
+        return this.getOrLoadChunk(block.getChunk()).createStoredBlock(block);
+    }
+
+    public CompoundTag getOrCreateBlock(Block block) {
+        return this.getOrLoadChunk(block.getChunk()).getOrCreateBlock(block);
     }
 
     public boolean isEntityStored(Entity entity) {
@@ -219,28 +258,16 @@ public class RegionRegister implements CoruptedDataFallback {
         return this.register.getStoredEntityInternal(uuid);
     }
 
+    public CompoundTag getStoredEntityUnsafe(UUID uuid) {
+        return this.register.getStoredEntityInternalUnsafe(uuid);
+    }
+
     public CompoundTag createStoredEntity(UUID uuid) {
         return this.register.createStoredEntityInternal(uuid);
     }
 
-    @Override
-    public String getCoruptedDataId() {
-        return "r." + x + "." + z + "_region";
-    }
-
-    @Override
-    public File getCoruptedDataFile() {
-        return this.regionFile;
-    }
-
-    @Override
-    public Tag getCoruptedDataCompoundTag() {
-        return this.regionTag;
-    }
-
-    @Override
-    public String getWorldName() {
-        return this.register.getWorldInstance().getName();
+    public CompoundTag getOrCreateEntity(UUID uuid) {
+        return this.register.getOrCreateEntityInternal(uuid);
     }
 
     @Override

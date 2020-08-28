@@ -1,8 +1,5 @@
-package ro.nicuch.tag.nbt.reg;
+package ro.nicuch.tag.nbt;
 
-import ro.nicuch.tag.nbt.CompoundTag;
-import ro.nicuch.tag.nbt.Tag;
-import ro.nicuch.tag.nbt.TagType;
 import ro.nicuch.tag.wrapper.BlockUUID;
 
 import java.io.DataInput;
