@@ -155,7 +155,7 @@ public class RegionRegister {
         }
     }
 
-    public void unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
+    public ChunkRegister unloadChunk(Chunk chunk, Set<UUID> entitiesArray) {
         ChunkUUID chunkUUID = new ChunkUUID(chunk);
         ReentrantLock lock = this.getChunkLock(chunkUUID);
         lock.lock();
@@ -163,6 +163,7 @@ public class RegionRegister {
             ChunkRegister chunkRegister = this.chunks.get(chunkUUID);
             chunkRegister.unload(true, entitiesArray);
             this.chunks.remove(chunkUUID);
+            return chunkRegister;
         } finally {
             lock.unlock();
         }
