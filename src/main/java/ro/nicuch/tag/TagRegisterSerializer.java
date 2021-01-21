@@ -11,7 +11,7 @@ import java.io.IOException;
 
 public interface TagRegisterSerializer {
 
-    Serializer<ChunkUUID> CHUNK_SERIALIZER = new Serializer<>() {
+    Serializer<ChunkUUID> CHUNK_SERIALIZER = new Serializer<ChunkUUID>() {
         @Override
         public void serialize(@NotNull DataOutput2 output, @NotNull ChunkUUID chunkUUID) throws IOException {
             output.writeInt(chunkUUID.getX());
@@ -24,7 +24,7 @@ public interface TagRegisterSerializer {
         }
     };
 
-    Serializer<ChunkCompoundTag> CHUNK_COMPOUND_TAG_SERIALIZER = new Serializer<>() {
+    Serializer<ChunkCompoundTag> CHUNK_COMPOUND_TAG_SERIALIZER = new Serializer<ChunkCompoundTag>() {
         @Override
         public void serialize(@NotNull DataOutput2 output, @NotNull ChunkCompoundTag tag) throws IOException {
             tag.write(output);
