@@ -7,7 +7,9 @@ import org.mapdb.Serializer;
 import ro.nicuch.tag.nbt.ChunkCompoundTag;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 
-import java.io.IOException;
+import java.io.*;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 public interface TagRegisterSerializer {
 
@@ -26,14 +28,32 @@ public interface TagRegisterSerializer {
 
     Serializer<ChunkCompoundTag> CHUNK_COMPOUND_TAG_SERIALIZER = new Serializer<ChunkCompoundTag>() {
         @Override
-        public void serialize(@NotNull DataOutput2 output, @NotNull ChunkCompoundTag tag) throws IOException {
-            tag.write(output);
+        public void serialize(@NotNull DataOutput2 output2, @NotNull ChunkCompoundTag tag) throws IOException {
+            try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                try (DeflaterOutputStream compressor = new DeflaterOutputStream(output)) {
+                    try (DataOutputStream dos = new DataOutputStream(compressor)) {
+                        tag.write(dos);
+                    }
+                }
+                byte[] data = output.toByteArray();
+                output2.write(data); // write data
+            }
         }
 
         @Override
-        public ChunkCompoundTag deserialize(@NotNull DataInput2 input, int i) throws IOException {
-            ChunkCompoundTag tag = new ChunkCompoundTag();
-            tag.read(input, 0); //broken depth
+        public ChunkCompoundTag deserialize(@NotNull DataInput2 input2, int i) throws IOException {
+            ChunkCompoundTag tag = new ChunkCompoundTag(); // empty tag
+            // stupid way of converting
+            byte[] data = new byte[i];
+            input2.readFully(data);
+            //
+            try (ByteArrayInputStream input = new ByteArrayInputStream(data)) {
+                try (InflaterInputStream decompressor = new InflaterInputStream(input)) {
+                    try (DataInputStream dis = new DataInputStream(decompressor)) {
+                        tag.read(dis, 0); // read data
+                    }
+                }
+            }
             return tag;
         }
     };

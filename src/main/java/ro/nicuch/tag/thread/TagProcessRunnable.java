@@ -13,31 +13,38 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class TagProcessRunnable {
-    private final ExecutorService executorService = Executors.newFixedThreadPool(6);
+    private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    private final ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
+
+    public TagProcessRunnable() {
+        this.executorService.scheduleAtFixedRate(() -> {
+            while (!this.tasks.isEmpty())
+                this.tasks.poll().run();
+        }, 20, 20, TimeUnit.MILLISECONDS);
+    }
 
     public void shutdown() {
-        executorService.shutdown();
+        this.executorService.shutdown();
     }
 
     // SYNC CALLS
     public void addToLoad(ChunkLoadEvent event) {
-        if (executorService.isTerminated())
+        if (this.executorService.isTerminated())
             return;
-        executorService.execute(() -> {
+        this.tasks.offer(() -> {
             Chunk chunk = event.getChunk();
             TagRegister.getOrLoadWorld(event.getWorld()).getOrLoadRegion(chunk).getOrLoadChunk(chunk);
         });
     }
 
     public void addToUnload(ChunkUnloadEvent event) {
-        if (executorService.isTerminated())
+        if (this.executorService.isTerminated())
             return;
-        executorService.execute(() -> {
+        this.tasks.offer(() -> {
             Set<UUID> entitiesSync = Arrays.stream(event.getChunk().getEntities()).map(Entity::getUniqueId).collect(Collectors.toSet());
             World world = event.getWorld();
             Chunk chunk = event.getChunk();

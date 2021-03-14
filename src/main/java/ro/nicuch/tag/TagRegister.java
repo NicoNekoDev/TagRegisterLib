@@ -4,18 +4,20 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
+import org.springframework.util.ConcurrentReferenceHashMap;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.register.WorldRegister;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 public class TagRegister {
-    private final static ConcurrentMap<String, WorldRegister> worlds = new ConcurrentHashMap<>();
-    private final static Map<String, ReentrantLock> worldsLock = Collections.synchronizedMap(new WeakHashMap<>());
+    private final static ConcurrentMap<String, WorldRegister> worlds = new ConcurrentHashMap<>(16);
+    private final static ConcurrentMap<String, ReentrantLock> worldsLock = new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
     private static boolean debug;
 
     private static ReentrantLock getWorldLock(String world) {

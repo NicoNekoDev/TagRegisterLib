@@ -4,6 +4,7 @@ import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
+import org.springframework.util.ConcurrentReferenceHashMap;
 import ro.nicuch.tag.nbt.CompoundTag;
 import ro.nicuch.tag.nbt.TagIO;
 import ro.nicuch.tag.nbt.TagType;
@@ -22,9 +23,9 @@ public class WorldRegister {
     private final File worldFile;
     private final File worldDataFolder;
     private final World world;
-    private final ConcurrentMap<RegionUUID, RegionRegister> regions = new ConcurrentHashMap<>();
-    private final Map<RegionUUID, ReentrantLock> regionsLock = Collections.synchronizedMap(new WeakHashMap<>());
-    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>();
+    private final ConcurrentMap<RegionUUID, RegionRegister> regions = new ConcurrentHashMap<>(16);
+    private final ConcurrentReferenceHashMap<RegionUUID, ReentrantLock> regionsLock = new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+    private final ConcurrentMap<UUID, CompoundTag> entities = new ConcurrentHashMap<>(16);
 
     public WorldRegister(World world) {
         this.world = world;
