@@ -1,10 +1,9 @@
 package ro.nicuch.tag.nbt.region;
 
 import org.jetbrains.annotations.Nullable;
+import ro.nicuch.tag.nbt.ChunkCompoundTag;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.channels.FileChannel;
@@ -15,13 +14,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class RegionFile {
-    private static final ByteBuffer EMPTY_SECTOR = ByteBuffer.allocate(4096).flip(); // 4kb sectors
+public class RegionFile implements AutoCloseable {
+    private static final int EMPTY_SECTOR_SIZE = 4096; // 4kb sectors
     private static final int CHUNKS_WIDTH = 32, CHUNKS_LENGTH = 32, CHUNKS_HEIGHT = 32; // a region file contains x32 x y32 x z32 chunks
     private static final int CHUNKS_TABLE_SIZE = CHUNKS_HEIGHT * CHUNKS_WIDTH * CHUNKS_LENGTH * 4; // chunks table contains each chunk big-endian int offset
 
-    private File region_file;
-    private FileInputStream fis;
+    private RandomAccessFile region_file;
     private FileChannel file_channel;
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -30,36 +28,68 @@ public class RegionFile {
 
     public RegionFile(final Path directory, final int region_x, final int region_y, final int region_z) {
         try {
-            this.region_file = new File(directory + File.separator + "r." + region_x + "." + region_y + "." + region_z + ".tag");
-            this.fis = new FileInputStream(region_file);
-            this.file_channel = this.fis.getChannel();
-
+            this.region_file = new RandomAccessFile(new File(directory + File.separator + "r." + region_x + "." + region_y + "." + region_z + ".tag"), "rw");
+            this.file_channel = this.region_file.getChannel();
             if (this.file_channel.size() < CHUNKS_TABLE_SIZE) {
-                this.file_channel.write(ByteBuffer.wrap(new byte[CHUNKS_TABLE_SIZE]));
+                this.file_channel.write(ByteBuffer.allocate(CHUNKS_TABLE_SIZE), 0);
             }
-            long sectors_size = file_channel.size() - CHUNKS_TABLE_SIZE;
+            long sectors_resize = this.file_channel.size() - CHUNKS_TABLE_SIZE;
             ByteBuffer growing_buffer = ByteBuffer.allocate(4096);
-            if ((sectors_size & 0xfff) != 0) {
+            if ((sectors_resize & 0xfff) != 0) {
                 /* the file size is not a multiple of 4KB, grow it */
-                growing_buffer.put((byte) 0);
+                for (int i = 0; i < ((sectors_resize + growing_buffer.position()) & 0xfff); i++)
+                    growing_buffer.put((byte) 0);
             }
-            this.file_channel.write(growing_buffer.flip(), 0);
+            this.file_channel.write(growing_buffer.flip(), this.file_channel.size());
 
-            int total_sectors = (int) ((this.file_channel.size() - CHUNKS_TABLE_SIZE)) / EMPTY_SECTOR.capacity();
+            int total_sectors = (int) (((this.file_channel.size() - CHUNKS_TABLE_SIZE)) / EMPTY_SECTOR_SIZE);
             this.sectors = Collections.synchronizedList(new ArrayList<>(total_sectors));
+            for (int i = 0; i < total_sectors; i++) {
+                this.sectors.add(true);
+            }
 
             ByteBuffer file_chunks_table = ByteBuffer.allocate(CHUNKS_TABLE_SIZE);
             this.file_channel.read(file_chunks_table, 0);
             file_chunks_table.flip();
             for (int i = 0; i < (32 * 32 * 32); i++) { // x, y, z
                 int offset = file_chunks_table.getInt();
-                offsets.put(i, offset);
-                if (offset != 0 && (offset >> 8) + (offset & 0xFF) <= sectors.size()) {             // I don't know how bitwise or shift works...
-                    for (int sector_number = 0; sector_number < (offset & 0xFF); sector_number++) { // But i've done my math, and having the first 3 bytes for position
-                        sectors.set((offset >> 8) + sector_number, false);                          // and last byte for sectors still works even tho there are ^32 more positions
+                this.offsets.put(i, offset);
+                if ((offset >> 8) + (offset & 0xFF) <= this.sectors.size()) {             // I don't know how bitwise or shift works...
+                    for (int sector_count = 0; sector_count < (offset & 0xFF); sector_count++) { // But i've done my math, and having the first 3 bytes for position
+                        this.sectors.set((offset >> 8) + sector_count, false);                          // and last byte for sectors still works even tho there are ^32 more positions
                     }
                 }
             }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public ChunkCompoundTag getChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z) {
+        ChunkCompoundTag compoundTag = new ChunkCompoundTag();
+        ByteBuffer buffer = this.readChunkData(chunk_x, chunk_y, chunk_z);
+        if (buffer == null)
+            return compoundTag;
+        if (!buffer.hasArray())
+            return compoundTag;
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array())) {
+            try (DataInputStream dis = new DataInputStream(bais)) {
+                compoundTag.read(dis, 0);
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        return compoundTag;
+    }
+
+    public void putChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z, final ChunkCompoundTag compoundTag) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            try (DataOutputStream dos = new DataOutputStream(baos)) {
+                compoundTag.write(dos);
+            }
+            byte[] array = baos.toByteArray();
+            ByteBuffer buffer = ByteBuffer.wrap(array);
+            this.writeChunkData(chunk_x, chunk_y, chunk_z, buffer, array.length);
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -89,8 +119,8 @@ public class RegionFile {
                 return null;
             }
 
-            long position = CHUNKS_TABLE_SIZE + ((long) sector_number * EMPTY_SECTOR.capacity());
-            long size = position + ((long) sector_count * EMPTY_SECTOR.capacity());
+            long position = CHUNKS_TABLE_SIZE + ((long) sector_number * EMPTY_SECTOR_SIZE);
+            long size = position + ((long) sector_count * EMPTY_SECTOR_SIZE);
 
             FileLock lock = this.file_channel.lock(position, size, false);
 
@@ -98,14 +128,14 @@ public class RegionFile {
             this.file_channel.read(chunk_size_buffer, position);
             int chunk_size = chunk_size_buffer.flip().getInt();
 
-            if (chunk_size > EMPTY_SECTOR.capacity() * sector_count) {
-                System.out.println("Invalid lenght");
+            if (chunk_size > EMPTY_SECTOR_SIZE * sector_count) {
+                System.out.println("Invalid length");
                 lock.release();
                 return null;
             }
 
-            ByteBuffer buffer = ByteBuffer.allocate(chunk_size + 1);
-            this.file_channel.read(buffer, position + 1);
+            ByteBuffer buffer = ByteBuffer.allocate(chunk_size);
+            this.file_channel.read(buffer, position + 4);
             lock.release();
             return buffer.flip(); // buffer ready for reading
         } catch (IOException ex) {
@@ -126,7 +156,7 @@ public class RegionFile {
             int offset = this.getOffset(region_chunk_x, region_chunk_y, region_chunk_z);
             int sector_number = offset >> 8;
             int sectors_allocated = offset & 0xFF;
-            int sectors_needed = ((length + 4) / 4096) + 1;
+            int sectors_needed = ((length + 4) / EMPTY_SECTOR_SIZE) + 1;
 
             if (sectors_needed >= 256)
                 return;
@@ -175,7 +205,7 @@ public class RegionFile {
                     this.lock.lock(); // locks the file growing for one thread at the time
 
                     for (int i = 0; i < sectors_needed; i++) {
-                        this.file_channel.write(EMPTY_SECTOR, this.file_channel.size());
+                        this.file_channel.write(ByteBuffer.allocate(EMPTY_SECTOR_SIZE), this.file_channel.size());
                         sectors.add(false);
                     }
 
@@ -192,10 +222,10 @@ public class RegionFile {
     }
 
     private void writeData(final int sector_number, final ByteBuffer buffer, final int length, final int sectors_needed) throws IOException {
-        long position = CHUNKS_TABLE_SIZE + ((long) sector_number * EMPTY_SECTOR.capacity());
-        FileLock lock = this.file_channel.lock(position, (long) sectors_needed * EMPTY_SECTOR.capacity(), false);
+        long position = CHUNKS_TABLE_SIZE + ((long) sector_number * EMPTY_SECTOR_SIZE);
+        FileLock lock = this.file_channel.lock(position, (long) sectors_needed * EMPTY_SECTOR_SIZE, false);
 
-        this.file_channel.write(ByteBuffer.allocate(1).putInt(length).flip(), position);
+        this.file_channel.write(ByteBuffer.allocate(4).putInt(length).flip(), position);
         this.file_channel.write(buffer, position + 4);
 
         lock.release();
@@ -209,22 +239,22 @@ public class RegionFile {
         return this.offsets.get((x + y * 32) + z * 1024);
     }
 
-    public void setOffset(final int x, final int y, final int z, final int offset) {
+    public void setOffset(final int x, final int y, final int z, final int offset) throws IOException {
         int location = (x + y * 32) + z * 1024;
         this.offsets.put(location, offset);
-        // todo update chunk table inside file channel
+
+        long position = location * 4L;
+        FileLock lock = this.file_channel.lock(position, 4, false);
+        this.file_channel.write(ByteBuffer.allocate(4).putInt(offset).flip(), position);
+        lock.release();
     }
 
-    public File getFile() {
-        return this.region_file;
-    }
-
+    @Override
     public void close() {
         try {
-            this.fis.close();
+            this.region_file.close();
         } catch (IOException ex) {
             ex.printStackTrace();
         }
     }
 }
-
