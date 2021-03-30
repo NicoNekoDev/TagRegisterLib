@@ -1,17 +1,19 @@
-package ro.nicuch.tag.nbt.region;
+package ro.nicuch.test.nbt.region;
 
 import org.jetbrains.annotations.Nullable;
-import ro.nicuch.tag.nbt.ChunkCompoundTag;
+import ro.nicuch.test.nbt.CompoundTag;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -24,12 +26,13 @@ public class RegionFile implements AutoCloseable {
     private static final int CHUNKS_TABLE_SIZE = CHUNKS_HEIGHT * CHUNKS_WIDTH * CHUNKS_LENGTH * OFFSET_LENGTH;
 
     private File region_file;
-    private FileChannel file_channel;
+    private AsynchronousFileChannel file_channel;
     private FileLock file_lock;
     //private final ReentrantLock lock = new ReentrantLock();
 
-    private List<Boolean> sectors_free;
-    private List<RegionOffset> offsets;
+    private ConcurrentMap<Integer, Boolean> sectors_free;
+    private ConcurrentMap<Integer, RegionOffset> offsets;
+    private final ReentrantLock[][][] regionLocks = new ReentrantLock[CHUNKS_WIDTH][CHUNKS_LENGTH][CHUNKS_HEIGHT];
 
     public RegionFile(final Path directory, final RegionID regionID) {
         this(directory, regionID.getX(), regionID.getY(), regionID.getZ());
@@ -40,11 +43,19 @@ public class RegionFile implements AutoCloseable {
             this.region_file = new File(directory + File.separator + "r." + region_x + "." + region_y + "." + region_z + ".tag");
             debugln("REGION LOAD " + this.region_file);
             debugln("This region should only load once!");
-            this.file_channel = FileChannel.open(this.region_file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
-            this.file_lock = this.file_channel.lock();
+            for (int x = 0; x < CHUNKS_WIDTH; x++) {
+                for (int y = 0; y < CHUNKS_HEIGHT; y++) {
+                    for (int z = 0; z < CHUNKS_LENGTH; z++) {
+                        regionLocks[x][y][z] = new ReentrantLock();
+                    }
+                }
+            }
+            this.file_channel = AsynchronousFileChannel.open(this.region_file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
+            this.file_lock = this.file_channel.lock().get();
             if (this.file_channel.size() < CHUNKS_TABLE_SIZE) {
-                int written = this.file_channel.write(ByteBuffer.allocate(CHUNKS_TABLE_SIZE), 0);
-                debugln("Written bytes: " + written);
+                int write = this.file_channel.write(ByteBuffer.allocate(1), CHUNKS_TABLE_SIZE - 1).get();
+                //this.file_channel.force(false); // no metadata
+                debugln("Written bytes: " + write);
             }
             long sectors_resize = this.file_channel.size() - CHUNKS_TABLE_SIZE;
             ByteBuffer growing_buffer = ByteBuffer.allocate(SECTOR_SIZE);
@@ -52,27 +63,30 @@ public class RegionFile implements AutoCloseable {
                 debugln("Growing file size: " + growing_buffer.position());
                 growing_buffer.put((byte) 0);
             }
-            int written = this.file_channel.write(growing_buffer.flip(), this.file_channel.size());
-            debugln("Written bytes: " + written);
+            int write = this.file_channel.write(growing_buffer.flip(), this.file_channel.size()).get();
+            //this.file_channel.force(false); // no metadata
+            debugln("Written bytes to increase file to " + SECTOR_SIZE + ": " + write);
             int total_sectors = (int) (((this.file_channel.size() - CHUNKS_TABLE_SIZE)) / SECTOR_SIZE); // can be 0 if no sectors exists
-            this.sectors_free = Collections.synchronizedList(new ArrayList<>(total_sectors));
+            //this.sectors_free = Collections.synchronizedList(new ArrayList<>(total_sectors));
+            this.sectors_free = new ConcurrentHashMap<>((int) ((total_sectors / 0.75f) + 1), 0.75f);
             for (int i = 0; i < total_sectors; i++) {
-                this.sectors_free.add(true); // add all present sectors and make them all free
+                this.sectors_free.put(i, true); // add all present sectors and make them all free
             }
 
-            this.offsets = Collections.synchronizedList(new ArrayList<>(CHUNKS_HEIGHT + CHUNKS_LENGTH + CHUNKS_WIDTH));
+            //this.offsets = Collections.synchronizedList(new ArrayList<>(CHUNKS_HEIGHT + CHUNKS_LENGTH + CHUNKS_WIDTH));
+            this.offsets = new ConcurrentHashMap<>((int) (CHUNKS_HEIGHT + CHUNKS_LENGTH + CHUNKS_WIDTH / 0.90f) + 1, 0.90f);
             ByteBuffer file_chunks_table = ByteBuffer.allocate(CHUNKS_TABLE_SIZE);
-            this.file_channel.read(file_chunks_table, 0);
+            this.file_channel.read(file_chunks_table, 0).get();
             file_chunks_table.flip();
-            for (int i = 0; i < (32 * 32 * 32); i++) { // x, y, z
+            for (int i = 0; i < (CHUNKS_WIDTH * CHUNKS_LENGTH * CHUNKS_HEIGHT); i++) { // x, y, z
                 int sector = file_chunks_table.getInt(); // the starting sector of the data
                 short sectors_size = file_chunks_table.getShort(); // the number of sectors the data covers
-                RegionOffset offset = new RegionOffset(sector, sectors_size);
                 //debugln("Offset position= <" + i + "> sector= <" + offset.getSector() + "> size= <" + offset.getSectorsSize() + ">");
-                this.offsets.add(i, offset);
+                //this.offsets.put(i, offset);
+                RegionOffset offset = this.offsets.compute(i, (k, v) -> new RegionOffset(sector, sectors_size));
                 if ((!offset.isEmpty()) && sector + sectors_size <= this.sectors_free.size()) { // if offset is not empty and starting sector + sectors_size is less than or equals sectors_free.size,
                     for (int sector_count = 0; sector_count < sectors_size; sector_count++) {   // iterate over each sector from sectors_size and
-                        this.sectors_free.set(sector + sector_count, false);                    // set it not free
+                        this.sectors_free.put(sector + sector_count, false);                    // set it not free
                     }
                 }
             }
@@ -90,86 +104,111 @@ public class RegionFile implements AutoCloseable {
         return this.region_file;
     }
 
-    public final ChunkCompoundTag getChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z) {
-        ChunkCompoundTag compoundTag = new ChunkCompoundTag();
-        ByteBuffer buffer = this.readChunkData(chunk_x, chunk_y, chunk_z);
-        if (buffer == null)
-            return compoundTag;
-        if (!buffer.hasArray()) {
-            debugln("miss has array");
-            return compoundTag;
-        }
-        if (!buffer.hasRemaining()) {
-            debugln("miss remaining");
-            return compoundTag;
-        }
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array())) {
-            try (DataInputStream dis = new DataInputStream(bais)) {
-                CompressionType version = CompressionType.valueOf(dis.readByte());
-                switch (version) {
-                    case ZLIB:
-                        try (InflaterInputStream zlib = new InflaterInputStream(dis)) {
-                            try (DataInputStream ret = new DataInputStream(zlib)) {
-                                compoundTag.read(ret, 0);
-                            }
-                        }
-                        break;
-                    case GZIP:
-                        try (GZIPInputStream gzip = new GZIPInputStream(dis)) {
-                            try (DataInputStream ret = new DataInputStream(gzip)) {
-                                compoundTag.read(ret, 0);
-                            }
-                        }
-                        break;
-                    default:
-                        compoundTag.read(dis, 0);
-                        break;
-                }
+    public final CompoundTag getChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z) {
+        int region_chunk_x = chunk_x & 31;
+        int region_chunk_y = chunk_y & 31;
+        int region_chunk_z = chunk_z & 31;
+
+        ReentrantLock lock = this.regionLocks[region_chunk_x][region_chunk_y][region_chunk_z];
+        try {
+            lock.lock();
+            CompoundTag compoundTag = new CompoundTag();
+            ByteBuffer buffer = this.readChunkData(chunk_x, chunk_y, chunk_z);
+            if (buffer == null)
+                return compoundTag;
+            if (!buffer.hasArray()) {
+                debugln("miss has array");
+                return compoundTag;
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
+            if (!buffer.hasRemaining()) {
+                debugln("miss remaining");
+                return compoundTag;
+            }
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array())) {
+                try (DataInputStream dis = new DataInputStream(bais)) {
+                    CompressionType version = CompressionType.valueOf(dis.readByte());
+                    switch (version) {
+                        case ZLIB:
+                            try (InflaterInputStream zlib = new InflaterInputStream(dis)) {
+                                try (DataInputStream ret = new DataInputStream(zlib)) {
+                                    compoundTag.read(ret, 0);
+                                }
+                            }
+                            break;
+                        case GZIP:
+                            try (GZIPInputStream gzip = new GZIPInputStream(dis)) {
+                                try (DataInputStream ret = new DataInputStream(gzip)) {
+                                    compoundTag.read(ret, 0);
+                                }
+                            }
+                            break;
+                        default:
+                            compoundTag.read(dis, 0);
+                            break;
+                    }
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+            return compoundTag;
+        } finally {
+            lock.unlock();
         }
-        return compoundTag;
     }
 
-    public final void putChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z, final ChunkCompoundTag compoundTag) {
-        this.putChunkCompoundTag(chunk_x, chunk_y, chunk_z, compoundTag, CompressionType.ZLIB); // default compression
+    public final void putChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z, final CompoundTag compoundTag) {
+        this.putChunkCompoundTag(chunk_x, chunk_y, chunk_z, compoundTag, CompressionType.NONE); // default compression
     }
 
-    public final void putChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z, final ChunkCompoundTag compoundTag, CompressionType compression) {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            try (DataOutputStream dos = new DataOutputStream(baos)) {
-                if (compression == CompressionType.GZIP) {
-                    dos.writeByte(CompressionType.GZIP.getVersion());
-                    try (GZIPOutputStream gzip = new GZIPOutputStream(dos)) {
-                        try (DataOutputStream ret = new DataOutputStream(gzip)) {
-                            compoundTag.write(ret);
-                            ret.flush();
-                        }
-                        gzip.flush();
-                        gzip.finish();
+    public final void putChunkCompoundTag(final int chunk_x, final int chunk_y, final int chunk_z, final CompoundTag compoundTag, CompressionType compression) {
+        int region_chunk_x = chunk_x & 31;
+        int region_chunk_y = chunk_y & 31;
+        int region_chunk_z = chunk_z & 31;
+
+        ReentrantLock lock = this.regionLocks[region_chunk_x][region_chunk_y][region_chunk_z];
+        try {
+            lock.lock();
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                try (DataOutputStream dos = new DataOutputStream(baos)) {
+                    switch (compression) {
+                        case ZLIB:
+                            dos.writeByte(CompressionType.ZLIB.getVersion());
+                            try (DeflaterOutputStream zlib = new DeflaterOutputStream(dos)) {
+                                try (DataOutputStream ret = new DataOutputStream(zlib)) {
+                                    compoundTag.write(ret);
+                                    ret.flush();
+                                }
+                                zlib.flush();
+                                zlib.finish();
+                            }
+                            break;
+                        case GZIP:
+                            dos.writeByte(CompressionType.GZIP.getVersion());
+                            try (GZIPOutputStream gzip = new GZIPOutputStream(dos)) {
+                                try (DataOutputStream ret = new DataOutputStream(gzip)) {
+                                    compoundTag.write(ret);
+                                    ret.flush();
+                                }
+                                gzip.flush();
+                                gzip.finish();
+                            }
+                            break;
+                        default:
+                            dos.writeByte(CompressionType.NONE.getVersion());
+                            compoundTag.write(dos);
+                            break;
                     }
-                } else if (compression == CompressionType.ZLIB) {
-                    dos.writeByte(CompressionType.ZLIB.getVersion());
-                    try (DeflaterOutputStream zlib = new DeflaterOutputStream(dos)) {
-                        try (DataOutputStream ret = new DataOutputStream(zlib)) {
-                            compoundTag.write(ret);
-                            ret.flush();
-                        }
-                        zlib.flush();
-                        zlib.finish();
-                    }
-                } else {
-                    compoundTag.write(dos);
+                    dos.flush();
                 }
-                dos.flush();
+                baos.flush();
+                byte[] array = baos.toByteArray();
+                ByteBuffer buffer = ByteBuffer.wrap(array);
+                this.writeChunkData(chunk_x, chunk_y, chunk_z, buffer, array.length);
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
-            baos.flush();
-            byte[] array = baos.toByteArray();
-            ByteBuffer buffer = ByteBuffer.wrap(array);
-            this.writeChunkData(chunk_x, chunk_y, chunk_z, buffer, array.length);
-        } catch (IOException ex) {
-            ex.printStackTrace();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -199,7 +238,7 @@ public class RegionFile implements AutoCloseable {
             long position = CHUNKS_TABLE_SIZE + ((long) sector_number * SECTOR_SIZE); // position where the sector should start
 
             ByteBuffer chunk_size_buffer = ByteBuffer.allocate(4);
-            this.file_channel.read(chunk_size_buffer, position);
+            this.file_channel.read(chunk_size_buffer, position).get();
             int length = chunk_size_buffer.flip().getInt();
 
             if (length > SECTOR_SIZE * sectors_size) { // length can't be greater than sectors_size * sector_size
@@ -207,13 +246,37 @@ public class RegionFile implements AutoCloseable {
             }
 
             ByteBuffer buffer = ByteBuffer.allocate(length);
-            this.file_channel.read(buffer, position + 4);// read data at position (skip 4 bytes for length value)
+            this.file_channel.read(buffer, position + 4).get();// read data at position (skip 4 bytes for length value)
             //lock.release();
             return buffer.flip(); // buffer ready for reading
         } catch (Exception ex) {
             ex.printStackTrace();
         }
         return null;
+    }
+
+    private SectorFree findSectorFree(int sectors_needed) {
+        Set<Map.Entry<Integer, Boolean>> entrySet = this.sectors_free.entrySet();
+        int run_start = 0;
+        int run_length = 0;
+
+        int index = -1;
+        for (Map.Entry<Integer, Boolean> entry : entrySet) {
+            index++;
+            boolean value = entry.getValue();
+            if (run_length != 0) {
+                if (value)
+                    run_length++;
+                else
+                    run_length = 0;
+            } else if (value) {
+                run_start = index;
+                run_length = 1;
+            }
+            if (run_length >= sectors_needed)
+                break;
+        }
+        return new SectorFree(run_start, run_length);
     }
 
     public final void writeChunkData(final int chunk_x, final int chunk_y, final int chunk_z, final ByteBuffer buffer, final int length) {
@@ -243,34 +306,19 @@ public class RegionFile implements AutoCloseable {
 
                 /* mark the sectors previously used for this chunk as free */
                 for (int i = 0; i < sectors_size; i++)
-                    this.sectors_free.set(sector_number + i, true);
+                    this.sectors_free.put(sector_number + i, true);
 
                 /* scan for a free space large enough to store this chunk */
-                int run_start = this.sectors_free.indexOf(true);
-                int run_length = 0;
-                if (run_start != -1) {
-                    for (int i = run_start; i < this.sectors_free.size(); i++) {
-                        if (run_length != 0) {
-                            if (this.sectors_free.get(i))
-                                run_length++;
-                            else
-                                run_length = 0;
-                        } else if (this.sectors_free.get(i)) {
-                            run_start = i;
-                            run_length = 1;
-                        }
-                        if (run_length >= sectors_needed)
-                            break;
-                    }
-                }
 
-                if (run_length >= sectors_needed) {
+                SectorFree sectorFree = this.findSectorFree(sectors_needed);
+
+                if (sectorFree.getRunLength() >= sectors_needed) {
                     /* we found a free space large enough */
                     debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "reuse");
-                    sector_number = run_start;
+                    sector_number = sectorFree.getSectorNumber();
                     this.setOffset(region_chunk_x, region_chunk_y, region_chunk_z, new RegionOffset(sector_number, (short) sectors_needed));
                     for (int i = 0; i < sectors_needed; i++)
-                        this.sectors_free.set(sector_number + i, false);
+                        this.sectors_free.put(sector_number + i, false);
                     this.writeData(sector_number, buffer, length);
 
                 } else {
@@ -281,9 +329,10 @@ public class RegionFile implements AutoCloseable {
                     //this.lock.lock();
 
                     for (int i = 0; i < sectors_needed; i++) {
-                        this.sectors_free.add(false); // make it set
-                        int written = this.file_channel.write(ByteBuffer.allocate(SECTOR_SIZE), ((long) (sector_number + i) * SECTOR_SIZE) + CHUNKS_TABLE_SIZE);
-                        debugln("Written (empty) bytes on file grow: " + written);
+                        this.sectors_free.put(sector_number + i, false); // make it set
+                        int write = this.file_channel.write(ByteBuffer.allocate(1), ((long) (sector_number + i) * SECTOR_SIZE) + CHUNKS_TABLE_SIZE + (SECTOR_SIZE - 1)).get();
+                        //this.file_channel.force(false);
+                        debugln("Written (empty) bytes on file grow: " + write);
                     }
 
                     //this.lock.unlock();
@@ -302,8 +351,9 @@ public class RegionFile implements AutoCloseable {
         try {
             debugln("sector number: " + sector_number);
             long position = CHUNKS_TABLE_SIZE + ((long) sector_number * SECTOR_SIZE);
-            this.file_channel.write(ByteBuffer.allocate(4).putInt(length).flip(), position);
-            this.file_channel.write(buffer, position + 4);
+            this.file_channel.write(ByteBuffer.allocate(4).putInt(length).flip(), position).get();
+            this.file_channel.write(buffer, position + 4).get();
+            //this.file_channel.force(false);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -315,17 +365,19 @@ public class RegionFile implements AutoCloseable {
 
     public final RegionOffset getOffset(final int x, final int y, final int z) {
         int location = (x + y * 32) + z * 1024;
+        System.out.println("Location of offset is " + location);
         return this.offsets.get(location);
     }
 
     public final void setOffset(final int x, final int y, final int z, final RegionOffset offset) {
         try {
             int location = (x + y * 32) + z * 1024;
-            this.offsets.set(location, offset);
+            this.offsets.put(location, offset);
 
             long position = (long) location * OFFSET_LENGTH;
             //FileLock lock = this.file_channel.lock(position, 4, true);
-            this.file_channel.write(ByteBuffer.allocate(6).putInt(offset.getSector()).putShort(offset.getSectorsSize()).flip(), position);
+            this.file_channel.write(ByteBuffer.allocate(6).putInt(offset.getSector()).putShort(offset.getSectorsSize()).flip(), position).get();
+            //this.file_channel.force(false);
             //lock.release();
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -333,7 +385,7 @@ public class RegionFile implements AutoCloseable {
     }
 
     private void debugln(String in) {
-        //System.out.println(in);
+        // System.out.println(in);
     }
 
     private void debug(String mode, int x, int y, int z, String in) {
