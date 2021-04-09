@@ -36,7 +36,7 @@ public class RegionID {
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, y, z);
+        return Objects.hash(this.x, this.y, this.z);
     }
 
     public static RegionID fromChunk(final int chunk_x, final int chunk_y, final int chunk_z) {
