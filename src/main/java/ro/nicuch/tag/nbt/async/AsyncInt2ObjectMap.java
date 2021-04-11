@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.objects.ObjectSet;
 import java.util.concurrent.Future;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 public interface AsyncInt2ObjectMap<V> {
 
@@ -15,6 +16,8 @@ public interface AsyncInt2ObjectMap<V> {
     Future<Void> clear();
 
     Future<V> put(int key, V value);
+
+    Future<V> replace(int key, V value);
 
     Future<V> get(int key);
 
@@ -37,4 +40,6 @@ public interface AsyncInt2ObjectMap<V> {
     ObjectSet<Int2ObjectMap.Entry<V>> int2ObjectEntrySet();
 
     Future<Void> fill(int position, int length, V value);
+
+    Future<Void> fill(int position, int length, Function<? super Integer, ? extends V> mappingFunction);
 }

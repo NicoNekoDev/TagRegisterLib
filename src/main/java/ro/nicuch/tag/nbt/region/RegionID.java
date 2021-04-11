@@ -4,9 +4,7 @@ import java.util.Objects;
 
 public class RegionID {
 
-    private final int x;
-    private final int y;
-    private final int z;
+    private final int x, y, z;
 
     public RegionID(final int x, final int y, final int z) {
         this.x = x;

@@ -33,7 +33,7 @@ public interface AsyncObject2ObjectMap<K, V> {
 
     Future<V> computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction);
 
-    Future<V> computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction);
+    Future<V> computeIfPresent(K key, Function<? super K, ? extends V> mappingFunction);
 
     Future<Boolean> isEmpty();
 

@@ -2,9 +2,10 @@ package ro.nicuch.tag.nbt.async;
 
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.ints.Int2BooleanFunction;
+import it.unimi.dsi.fastutil.ints.Int2BooleanLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2BooleanMap;
-import it.unimi.dsi.fastutil.ints.Int2BooleanOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectSet;
+import it.unimi.dsi.fastutil.ints.Int2BooleanSortedMap;
+import it.unimi.dsi.fastutil.objects.ObjectSortedSet;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,31 +15,36 @@ import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 import java.util.function.BiFunction;
 
-public class AsyncInt2BooleanHashMap implements AsyncInt2BooleanMap {
-    private final Int2BooleanMap map;
+public class AsyncInt2BooleanSortedHashMap implements AsyncInt2BooleanSortedMap {
+    private final Int2BooleanSortedMap map;
     private final ExecutorService executors;
     private final ReentrantReadWriteLock lock;
     private final ReadLock readLock;
     private final WriteLock writeLock;
 
-    public AsyncInt2BooleanHashMap() {
+    public AsyncInt2BooleanSortedHashMap() {
         this(Hash.DEFAULT_INITIAL_SIZE, Hash.DEFAULT_LOAD_FACTOR, null, false);
     }
 
-    public AsyncInt2BooleanHashMap(int capacity) {
+    public AsyncInt2BooleanSortedHashMap(int capacity) {
         this(capacity, Hash.DEFAULT_LOAD_FACTOR, null, false);
     }
 
-    public AsyncInt2BooleanHashMap(int capacity, float loadFactor) {
+    public AsyncInt2BooleanSortedHashMap(int capacity, float loadFactor) {
         this(capacity, loadFactor, null, false);
     }
 
-    public AsyncInt2BooleanHashMap(int capacity, float loadFactor, ExecutorService executors, boolean fairLock) {
-        this.map = new Int2BooleanOpenHashMap(capacity, loadFactor);
+    public AsyncInt2BooleanSortedHashMap(int capacity, float loadFactor, ExecutorService executors, boolean fairLock) {
+        this.map = new Int2BooleanLinkedOpenHashMap(capacity, loadFactor);
         this.executors = executors != null ? executors : Executors.newCachedThreadPool();
         this.lock = new ReentrantReadWriteLock(fairLock);
         this.readLock = this.lock.readLock();
         this.writeLock = this.lock.writeLock();
+    }
+
+    @Override
+    public Int2BooleanSortedMap getMapDirectly() {
+        return this.map;
     }
 
     @Override
@@ -65,6 +71,30 @@ public class AsyncInt2BooleanHashMap implements AsyncInt2BooleanMap {
             this.writeLock.lock();
             try {
                 return this.map.put(key, value);
+            } finally {
+                this.writeLock.unlock();
+            }
+        });
+    }
+
+    @Override
+    public Future<Boolean> replace(int key, boolean value) {
+        return this.executors.submit(() -> {
+            this.writeLock.lock();
+            try {
+                return this.map.replace(key, value);
+            } finally {
+                this.writeLock.unlock();
+            }
+        });
+    }
+
+    @Override
+    public Future<Boolean> putIfAbsent(int key, boolean value) {
+        return this.executors.submit(() -> {
+            this.writeLock.lock();
+            try {
+                return this.map.putIfAbsent(key, value);
             } finally {
                 this.writeLock.unlock();
             }
@@ -189,7 +219,7 @@ public class AsyncInt2BooleanHashMap implements AsyncInt2BooleanMap {
     }
 
     @Override
-    public ObjectSet<Int2BooleanMap.Entry> int2BooleanEntrySet() {
+    public ObjectSortedSet<Int2BooleanMap.Entry> int2BooleanEntrySet() {
         return this.map.int2BooleanEntrySet();
     }
 

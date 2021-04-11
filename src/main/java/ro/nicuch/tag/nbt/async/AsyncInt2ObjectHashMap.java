@@ -13,6 +13,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 public class AsyncInt2ObjectHashMap<V> implements AsyncInt2ObjectMap<V> {
     private final Int2ObjectMap<V> map;
@@ -65,6 +66,18 @@ public class AsyncInt2ObjectHashMap<V> implements AsyncInt2ObjectMap<V> {
             this.writeLock.lock();
             try {
                 return this.map.put(key, value);
+            } finally {
+                this.writeLock.unlock();
+            }
+        });
+    }
+
+    @Override
+    public Future<V> replace(int key, V value) {
+        return this.executors.submit(() -> {
+            this.writeLock.lock();
+            try {
+                return this.map.replace(key, value);
             } finally {
                 this.writeLock.unlock();
             }
@@ -201,6 +214,23 @@ public class AsyncInt2ObjectHashMap<V> implements AsyncInt2ObjectMap<V> {
                 int end = position + length;
                 for (int n = position; n < end; n++)
                     this.map.put(n, value);
+                return null;
+            } finally {
+                this.writeLock.unlock();
+            }
+        });
+    }
+
+    @Override
+    public Future<Void> fill(int position, int length, Function<? super Integer, ? extends V> mappingFunction) {
+        return this.executors.submit(() -> {
+            this.writeLock.lock();
+            try {
+                int end = position + length;
+                for (int n = position; n < end; n++) {
+                    V value = mappingFunction.apply(n);
+                    this.map.put(n, value);
+                }
                 return null;
             } finally {
                 this.writeLock.unlock();

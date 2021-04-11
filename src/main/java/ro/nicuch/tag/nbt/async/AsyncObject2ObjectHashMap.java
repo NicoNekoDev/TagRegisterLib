@@ -151,20 +151,7 @@ public class AsyncObject2ObjectHashMap<K, V> implements AsyncObject2ObjectMap<K,
             this.writeLock.lock();
             this.readLock.lock();
             try {
-                V oldValue = this.map.get(key);
-                V newValue = remappingFunction.apply(key, oldValue);
-                if (oldValue != null) {
-                    if (newValue != null)
-                        this.map.put(key, newValue);
-                    else
-                        this.map.remove(key);
-                } else {
-                    if (newValue != null) {
-                        this.map.put(key, newValue);
-                    } else
-                        return null;
-                }
-                return newValue;
+                return this.map.compute(key, remappingFunction);
             } finally {
                 this.writeLock.unlock();
                 this.readLock.unlock();
@@ -179,15 +166,7 @@ public class AsyncObject2ObjectHashMap<K, V> implements AsyncObject2ObjectMap<K,
             this.writeLock.lock();
             this.readLock.lock();
             try {
-                V oldValue = this.map.get(key);
-                if (oldValue == null) {
-                    V newValue = mappingFunction.apply(key);
-                    if (newValue != null) {
-                        this.map.put(key, newValue);
-                        return newValue;
-                    }
-                }
-                return oldValue;
+                return this.map.computeIfAbsent(key, mappingFunction);
             } finally {
                 this.writeLock.unlock();
                 this.readLock.unlock();
@@ -196,21 +175,13 @@ public class AsyncObject2ObjectHashMap<K, V> implements AsyncObject2ObjectMap<K,
     }
 
     @Override
-    public Future<V> computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+    public Future<V> computeIfPresent(K key, Function<? super K, ? extends V> mappingFunction) {
         return this.executors.submit(() -> {
             // acquire both write and read locks
             this.writeLock.lock();
             this.readLock.lock();
             try {
-                V oldValue = this.map.get(key);
-                if (oldValue != null) {
-                    V newValue = remappingFunction.apply(key, oldValue);
-                    if (newValue != null)
-                        return this.map.put(key, newValue);
-                    else
-                        return this.map.remove(key);
-                }
-                return null;
+                return this.map.computeIfAbsent(key, mappingFunction);
             } finally {
                 this.writeLock.unlock();
                 this.readLock.unlock();
