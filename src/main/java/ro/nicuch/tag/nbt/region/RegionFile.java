@@ -1,4 +1,4 @@
-package ro.nicuch.tag.nbt.region;
+package ro.nicuch.test.nbt.region;
 
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.ints.Int2BooleanMap;
@@ -283,12 +283,12 @@ public class RegionFile implements AutoCloseable {
             } else {
                 // this si a hacky thing...that will slow us down =(
                 // but can't do anything about it, as we need the sectors be synchronized
+                List<Future<Integer>> futuresEmtpySectors = new ArrayList<>();
                 ReentrantReadWriteLock.WriteLock writeLock = this.sectors_free.getLock().writeLock();
                 ReentrantReadWriteLock.ReadLock readLock = this.sectors_free.getLock().readLock();
                 writeLock.lock();
                 readLock.lock();
                 Int2BooleanSortedMap theActualMap = this.sectors_free.getMapDirectly();
-                List<Future<Integer>> futuresEmtpySectors = new ArrayList<>();
                 try {
                     /* we need to allocate new sectors or reallocate the existing ones */
                     /* mark the sectors previously used for this chunk as free */
@@ -375,10 +375,9 @@ public class RegionFile implements AutoCloseable {
     public final void setOffset(final int x, final int y, final int z, final RegionOffset offset) {
         try {
             int location = x + (z * 32) + (y * 1024);
-            Future<RegionOffset> nonWaitingFuture = this.offsets.replace(location, offset);
+            this.offsets.replace(location, offset).get();
             long position = (long) location * OFFSET_LENGTH;
             this.file_channel.write(ByteBuffer.allocate(OFFSET_LENGTH).putInt(offset.getSector()).putShort(offset.getSectorsSize()).flip(), position).get();
-            nonWaitingFuture.get();
         } catch (Exception ex) {
             ex.printStackTrace();
         }
