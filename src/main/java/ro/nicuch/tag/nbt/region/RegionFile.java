@@ -1,17 +1,13 @@
-package ro.nicuch.test.nbt.region;
+package ro.nicuch.tag.nbt.region;
 
 import it.unimi.dsi.fastutil.Hash;
-import it.unimi.dsi.fastutil.ints.Int2BooleanMap;
-import it.unimi.dsi.fastutil.ints.Int2BooleanSortedMap;
+import it.unimi.dsi.fastutil.ints.IntAVLTreeSet;
+import it.unimi.dsi.fastutil.ints.IntBidirectionalIterator;
 import it.unimi.dsi.fastutil.io.FastByteArrayInputStream;
 import it.unimi.dsi.fastutil.io.FastByteArrayOutputStream;
-import it.unimi.dsi.fastutil.objects.ObjectSortedSet;
 import org.jetbrains.annotations.Nullable;
 import ro.nicuch.test.nbt.CompoundTag;
-import ro.nicuch.test.nbt.async.AsyncInt2BooleanSortedHashMap;
-import ro.nicuch.test.nbt.async.AsyncInt2BooleanSortedMap;
-import ro.nicuch.test.nbt.async.AsyncInt2ObjectHashMap;
-import ro.nicuch.test.nbt.async.AsyncInt2ObjectMap;
+import ro.nicuch.test.nbt.async.AsyncIntSortedSet;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -24,10 +20,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.zip.DeflaterOutputStream;
@@ -45,9 +39,10 @@ public class RegionFile implements AutoCloseable {
     private File region_file;
     private AsynchronousFileChannel file_channel;
     private FileLock file_lock;
-    private AsyncInt2BooleanSortedMap sectors_free;
-    private final AsyncInt2ObjectMap<RegionOffset> offsets = new AsyncInt2ObjectHashMap<>(OFFSET_TABLE_LENGTH, Hash.DEFAULT_LOAD_FACTOR);
+    private final AsyncIntSortedSet free_sectors = new AsyncIntSortedSet();
+    private final ConcurrentMap<Integer, RegionOffset> offsets = new ConcurrentHashMap<>(OFFSET_TABLE_LENGTH, Hash.DEFAULT_LOAD_FACTOR);
     private final ReentrantLock[][][] regionLocks = new ReentrantLock[CHUNKS_WIDTH][CHUNKS_HEIGHT][CHUNKS_LENGTH];
+    private final AtomicInteger sectors_size = new AtomicInteger();
 
     public RegionFile(final Path directory, final RegionID regionID) {
         this(directory, regionID.getX(), regionID.getY(), regionID.getZ());
@@ -80,11 +75,8 @@ public class RegionFile implements AutoCloseable {
             if (growing_buffer.hasRemaining())
                 this.file_channel.write(growing_buffer, this.file_channel.size()).get();
             int total_sectors = (int) (((this.file_channel.size() - CHUNKS_TABLE_SIZE)) / SECTOR_SIZE); // can be 0 if no sectors exists
-            if (total_sectors != 0)
-                this.sectors_free = new AsyncInt2BooleanSortedHashMap((int) ((total_sectors / Hash.DEFAULT_LOAD_FACTOR) + 1), Hash.DEFAULT_LOAD_FACTOR);
-            else
-                this.sectors_free = new AsyncInt2BooleanSortedHashMap();
-            Future<Void> futureFillFreeSectors = this.sectors_free.fill(0, total_sectors, true); // fill the sectors
+            this.sectors_size.set(total_sectors);
+            Future<Void> futureFillFreeSectors = this.free_sectors.fill(0, total_sectors); // fill the sectors
             // don't wait for future, do other tasks
             ByteBuffer file_chunks_table = ByteBuffer.allocate(CHUNKS_TABLE_SIZE);
             this.file_channel.read(file_chunks_table, 0).get();
@@ -94,10 +86,10 @@ public class RegionFile implements AutoCloseable {
             for (int i = 0; i < (CHUNKS_WIDTH * CHUNKS_LENGTH * CHUNKS_HEIGHT); i++) { // x, y, z
                 int sector = file_chunks_table.getInt(); // the starting sector of the data
                 short sectors_size = file_chunks_table.getShort(); // the number of sectors the data covers
-                RegionOffset offset = this.offsets.compute(i, (k, v) -> new RegionOffset(sector, sectors_size)).get();
-                if ((!offset.isEmpty()) && sector + sectors_size <= this.sectors_free.size().get()) { // if offset is not empty and starting sector + sectors_size is less than or equals sectors_free.size,
+                RegionOffset offset = this.offsets.compute(i, (k, v) -> new RegionOffset(sector, sectors_size));//.get();
+                if ((!offset.isEmpty()) && sector + sectors_size <= total_sectors) { // if offset is not empty and starting sector + sectors_size is less than or equals sectors_free.size,
                     for (int sector_count = 0; sector_count < sectors_size; sector_count++) {   // iterate over each sector from sectors_size and
-                        this.sectors_free.replace(sector + sector_count, false).get();                    // set it not free
+                        this.free_sectors.remove(sector + sector_count).get();                  // set it not free
                     }
                 }
             }
@@ -241,7 +233,7 @@ public class RegionFile implements AutoCloseable {
             }
             int sector_number = offset.getSector();
             int sectors_size = offset.getSectorsSize();
-            if (sector_number + sectors_size > this.sectors_free.size().get()) // sectors shouldn't be greater than sectors_free.size
+            if (sector_number + sectors_size > this.sectors_size.get()) // sectors shouldn't be greater than sectors_free.size
                 throw new IllegalStateException("Invalid sector");
             long position = CHUNKS_TABLE_SIZE + ((long) sector_number * SECTOR_SIZE); // position where the sector should start
             ByteBuffer chunk_size_buffer = ByteBuffer.allocate(4);
@@ -265,8 +257,7 @@ public class RegionFile implements AutoCloseable {
             short sectors_size = offset.getSectorsSize();
             if (emptyChunk) {
                 /* mark the sectors previously used for this chunk as free */
-                for (int i = 0; i < sectors_size; i++)
-                    this.sectors_free.replace(sector_number + i, true).get();
+                this.free_sectors.fill(sector_number, sectors_size).get();
                 this.setOffset(region_chunk_x, region_chunk_y, region_chunk_z, new RegionOffset(sector_number, (short) 0)); // mark offset as empty
                 return;
             }
@@ -281,52 +272,65 @@ public class RegionFile implements AutoCloseable {
             if (sectors_needed == sectors_size) { // sectors needed are equals to sectors_size, simply overwrite them
                 //debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "rewrite");
             } else {
-                // this si a hacky thing...that will slow us down =(
+                // this is a hacky thing...that will slow us down =(
                 // but can't do anything about it, as we need the sectors be synchronized
                 List<Future<Integer>> futuresEmtpySectors = new ArrayList<>();
-                ReentrantReadWriteLock.WriteLock writeLock = this.sectors_free.getLock().writeLock();
-                ReentrantReadWriteLock.ReadLock readLock = this.sectors_free.getLock().readLock();
+
+                ReentrantReadWriteLock.WriteLock writeLock = this.free_sectors.getLock().writeLock();
+                ReentrantReadWriteLock.ReadLock readLock = this.free_sectors.getLock().readLock();
                 writeLock.lock();
                 readLock.lock();
-                Int2BooleanSortedMap theActualMap = this.sectors_free.getMapDirectly();
+                IntAVLTreeSet theActualSet = this.free_sectors.getSetDirectly();
                 try {
-                    /* we need to allocate new sectors or reallocate the existing ones */
-                    /* mark the sectors previously used for this chunk as free */
-                    for (int i = 0; i < sectors_size; i++)
-                        theActualMap.replace(sector_number + i, true);
-                    /* scan for a free space large enough to store this chunk */
-                    ObjectSortedSet<Int2BooleanMap.Entry> entrySet = theActualMap.int2BooleanEntrySet();
-                    int run_start = 0;
-                    int run_length = 0;
-                    int index = -1;
-                    for (Int2BooleanMap.Entry entry : entrySet) {
-                        index++;
-                        boolean value = entry.getBooleanValue();
-                        int key = entry.getIntKey();
-                        if (run_length != 0) {
-                            if (value)
-                                run_length++;
-                            else
+                    if (!theActualSet.isEmpty()) {
+                        /* we need to allocate new sectors or reallocate the existing ones */
+                        /* mark the sectors previously used for this chunk as free */
+                        for (int i = 0; i < sectors_size; i++)
+                            theActualSet.add(sector_number + i);
+                        /* scan for a free space large enough to store this chunk */
+                        IntBidirectionalIterator iterator = theActualSet.iterator();
+                        int run_start = 0;
+                        int run_length = 0;
+                        while (iterator.hasNext()) {
+                            int next = iterator.nextInt();
+                            int previous = -2;
+                            if (iterator.hasPrevious()) {
+                                previous = iterator.previousInt();
+                            }
+                            if ((next + 1) == previous) {
+                                if (run_length != 0) {
+                                    run_length++;
+                                } else {
+                                    run_start = next;
+                                    run_length = 1;
+                                }
+                            } else {
                                 run_length = 0;
-                        } else if (value) {
-                            run_start = index;
-                            run_length = 1;
+                            }
+                            if (run_length >= sectors_needed)
+                                break;
                         }
-                        if (run_length >= sectors_needed)
-                            break;
-                    }
-                    if (run_length >= sectors_needed) {
-                        /* we found a free space large enough */
-                        //debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "reuse");
-                        sector_number = run_start;
-                        for (int i = 0; i < sectors_needed; i++)
-                            theActualMap.replace(sector_number + i, false);
+                        if (run_length >= sectors_needed) {
+                            /* we found a free space large enough */
+                            //debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "reuse");
+                            sector_number = run_start;
+                            for (int i = 0; i < sectors_needed; i++)
+                                theActualSet.remove(sector_number + i);
+                        } else {
+                            /* no free space large enough found -- we need to grow the file */
+                            //debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "grow");
+                            sector_number = this.sectors_size.get();
+                            this.sectors_size.addAndGet(sectors_needed);
+                            for (int i = 0; i < sectors_needed; i++) {
+                                //theActualMap.putIfAbsent(sector_number + i, false); // make it set
+                                futuresEmtpySectors.add(this.file_channel.write(ByteBuffer.allocate(SECTOR_SIZE), ((long) (sector_number + i) * SECTOR_SIZE) + CHUNKS_TABLE_SIZE));
+                            }
+                        }
                     } else {
-                        /* no free space large enough found -- we need to grow the file */
-                        //debug("SAVE", region_chunk_x, region_chunk_y, region_chunk_z, length, "grow");
-                        sector_number = theActualMap.size();
+                        sector_number = this.sectors_size.get();
+                        this.sectors_size.addAndGet(sectors_needed);
                         for (int i = 0; i < sectors_needed; i++) {
-                            theActualMap.putIfAbsent(sector_number + i, false); // make it set
+                            //theActualMap.putIfAbsent(sector_number + i, false); // make it set
                             futuresEmtpySectors.add(this.file_channel.write(ByteBuffer.allocate(SECTOR_SIZE), ((long) (sector_number + i) * SECTOR_SIZE) + CHUNKS_TABLE_SIZE));
                         }
                     }
@@ -363,22 +367,17 @@ public class RegionFile implements AutoCloseable {
     }
 
     public final RegionOffset getOffset(final int x, final int y, final int z) {
-        try {
-            int location = x + (z * 32) + (y * 1024);
-            return this.offsets.get(location).get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
-            return new RegionOffset(0, (short) 0);
-        }
+        int location = x + (z * 32) + (y * 1024);
+        return this.offsets.get(location);//.get();
     }
 
     public final void setOffset(final int x, final int y, final int z, final RegionOffset offset) {
         try {
             int location = x + (z * 32) + (y * 1024);
-            this.offsets.replace(location, offset).get();
+            this.offsets.replace(location, offset);//.get();
             long position = (long) location * OFFSET_LENGTH;
             this.file_channel.write(ByteBuffer.allocate(OFFSET_LENGTH).putInt(offset.getSector()).putShort(offset.getSectorsSize()).flip(), position).get();
-        } catch (Exception ex) {
+        } catch (InterruptedException | ExecutionException ex) {
             ex.printStackTrace();
         }
     }
