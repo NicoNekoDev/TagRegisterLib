@@ -1,46 +1,33 @@
 package ro.nicuch.tag.wrapper;
 
-import org.bukkit.Chunk;
-import ro.nicuch.tag.register.RegionRegister;
-
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class RegionUUID {
-    private final int x;
-    private final int z;
+public record RegionUUID(int x, int y, int z) {
 
-    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),z([-]?[0-9]+)>");
+    private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
 
-    public RegionUUID(final RegionRegister register) {
-        this(register.getX(), register.getZ());
-    }
-
-    public RegionUUID(final int x, final int z) {
-        this.x = x;
-        this.z = z;
-    }
-
-    public final int getX() {
+    public int getX() {
         return this.x;
     }
 
-    public final int getZ() {
+    public int getY() {
+        return this.y;
+    }
+
+    public int getZ() {
         return this.z;
     }
 
-    public static RegionUUID fromChunk(Chunk chunk) {
-        return new RegionUUID(Math.floorDiv(chunk.getX(), 32), Math.floorDiv(chunk.getZ(), 32));
-    }
-
-    public static RegionUUID fromString(String id) {
+    public static RegionUUID fromString(final String id) {
         try {
             Matcher matcher = pattern.matcher(id);
             if (matcher.find()) {
                 int x = Integer.parseInt(matcher.group(1));
-                int z = Integer.parseInt(matcher.group(2));
-                return new RegionUUID(x, z);
+                int y = Integer.parseInt(matcher.group(2));
+                int z = Integer.parseInt(matcher.group(3));
+                return new RegionUUID(x, y, z);
             } else
                 throw new IllegalArgumentException("RegionUUID couldn't parse from string.");
         } catch (IllegalStateException | NumberFormatException e) {
@@ -48,23 +35,28 @@ public class RegionUUID {
         }
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (!(obj instanceof RegionUUID))
-            return false;
-        RegionUUID regionUUID = (RegionUUID) obj;
-        return x == regionUUID.getX() && z == regionUUID.getZ();
+    public static RegionUUID fromChunk(ChunkUUID id) {
+        int regX = id.getX() >> 5;
+        int regY = id.getY() >> 5;
+        int regZ = id.getZ() >> 5;
+        return new RegionUUID(regX, regY, regZ);
     }
 
     @Override
     public String toString() {
-        return "<x" + x + ",z" + z + ">";
+        return "<x" + this.x + ",y" + this.y + ",z" + this.z + ">";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RegionUUID that = (RegionUUID) o;
+        return this.x == that.x && this.y == that.y && this.z == that.z;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, z, this.toString());
+        return Objects.hash(this.x, this.y, this.z);
     }
 }

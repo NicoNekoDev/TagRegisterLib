@@ -1,4 +1,4 @@
-package ro.nicuch.tag.nbt.async;
+package ro.nicuch.tag.async;
 
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
