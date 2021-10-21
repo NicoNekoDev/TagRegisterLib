@@ -2,7 +2,7 @@ package ro.nicuch.tag.wrapper;
 
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import ro.nicuch.tag.grid.Direction;
+import ro.nicuch.tag.util.Direction;
 
 import java.util.Objects;
 import java.util.regex.Matcher;

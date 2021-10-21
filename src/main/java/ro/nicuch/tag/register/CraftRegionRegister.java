@@ -1,6 +1,6 @@
 package ro.nicuch.tag.register;
 
-import ro.nicuch.tag.CraftRegisterExecutors;
+import ro.nicuch.tag.CraftTagRegister;
 import ro.nicuch.tag.nbt.ChunkCompoundTag;
 import ro.nicuch.tag.nbt.region.RegionFile;
 import ro.nicuch.tag.wrapper.ChunkUUID;
@@ -34,7 +34,7 @@ public class CraftRegionRegister {
 
     public final void load() {
         this.status.set(Status.LOADING);
-        CraftRegisterExecutors.getRegionExecutor().submit(this.loadTask);
+        CraftTagRegister.getRegionExecutor().submit(this.loadTask);
     }
 
     public final ChunkCompoundTag getChunkTag(final ChunkUUID chunkId) {

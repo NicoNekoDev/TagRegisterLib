@@ -1,4 +1,4 @@
-package ro.nicuch.tag.grid;
+package ro.nicuch.tag.util;
 
 public enum Direction {
     CENTER(0, 0, 0),

@@ -1,21 +1,20 @@
 package ro.nicuch.tag.register;
 
-import io.github.NicoNekoDev.SimpleTuples.Pair;
 import io.github.NicoNekoDev.SimpleTuples.Quartet;
-import ro.nicuch.tag.CraftRegisterExecutors;
-import ro.nicuch.tag.grid.Direction;
-import ro.nicuch.tag.grid.PropagationType;
+import ro.nicuch.tag.CraftTagRegister;
 import ro.nicuch.tag.nbt.ChunkCompoundTag;
+import ro.nicuch.tag.util.Direction;
+import ro.nicuch.tag.util.PropagationType;
 import ro.nicuch.tag.wrapper.ChunkUUID;
 import ro.nicuch.tag.wrapper.RegionUUID;
 
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 public class CraftChunkRegister {
     private final CraftWorldRegister register;
@@ -41,21 +40,23 @@ public class CraftChunkRegister {
         return this.status.get();
     }
 
-    public final void load() {
-        this.status.set(Status.LOADING);
-        CraftRegisterExecutors.getChunkExecutor(this.chunkId.getWorkerThread(CraftRegisterExecutors.getChunkThreads())).submit(this.loadTask);
+    public final void awaitToLoad() throws ExecutionException, InterruptedException, TimeoutException {
+        this.loadTask.get(30, TimeUnit.SECONDS);
     }
 
-    private Set<Pair<ChunkUUID, Direction>> propagateTo(Set<ChunkUUID> visitedChunks, Direction... directions) {
-        Set<Pair<ChunkUUID, Direction>> triplets = new HashSet<>();
+    public final void load() {
+        this.status.set(Status.LOADING);
+        CraftTagRegister.getChunkExecutor(this.chunkId.getWorkerThread(CraftTagRegister.getChunkThreads())).submit(this.loadTask);
+    }
+
+    private void propagateTo(Set<Quartet<ChunkUUID, Direction, PropagationType, Integer>> propagatedChunks, Set<ChunkUUID> visitedChunks, PropagationType type, int distance, Direction... directions) {
         for (Direction direction : directions) {
             ChunkUUID chunkUUID = this.chunkId.getRelative(direction);
             if (!visitedChunks.contains(chunkUUID)) {
-                triplets.add(Pair.of(chunkUUID, direction));
+                propagatedChunks.add(Quartet.of(chunkUUID, direction, type, distance));
                 visitedChunks.add(chunkUUID);
             }
         }
-        return triplets;
     }
 
     public Set<Quartet<ChunkUUID, Direction, PropagationType, Integer>> propagate(Set<ChunkUUID> visitedChunks, Direction direction, PropagationType type, int distance) {
@@ -64,24 +65,17 @@ public class CraftChunkRegister {
         int nextDistance = distance - 1;
         switch (type) {
             case CENTER -> {
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                Direction.NORTH, Direction.SOUTH, Direction.UP, Direction.DOWN, Direction.EAST, Direction.WEST
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.SIDE, nextDistance)).collect(Collectors.toSet())
-                        // streams are stupid!
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.SIDE, nextDistance,
+                        Direction.NORTH, Direction.SOUTH, Direction.UP, Direction.DOWN, Direction.EAST, Direction.WEST
                 );
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_EAST, Direction.SOUTH_WEST,
-                                Direction.NORTH_UP, Direction.SOUTH_UP, Direction.WEST_UP, Direction.EAST_UP,
-                                Direction.NORTH_DOWN, Direction.SOUTH_DOWN, Direction.WEST_DOWN, Direction.EAST_DOWN
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.EDGE, nextDistance)).collect(Collectors.toSet())
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.EDGE, nextDistance,
+                        Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_EAST, Direction.SOUTH_WEST,
+                        Direction.NORTH_UP, Direction.SOUTH_UP, Direction.WEST_UP, Direction.EAST_UP,
+                        Direction.NORTH_DOWN, Direction.SOUTH_DOWN, Direction.WEST_DOWN, Direction.EAST_DOWN
                 );
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                Direction.NORTH_EAST_UP, Direction.NORTH_WEST_UP, Direction.SOUTH_EAST_UP, Direction.SOUTH_WEST_UP,
-                                Direction.NORTH_EAST_DOWN, Direction.NORTH_WEST_DOWN, Direction.SOUTH_EAST_DOWN, Direction.SOUTH_WEST_DOWN
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.CORNER, nextDistance)).collect(Collectors.toSet())
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.CORNER, nextDistance,
+                        Direction.NORTH_EAST_UP, Direction.NORTH_WEST_UP, Direction.SOUTH_EAST_UP, Direction.SOUTH_WEST_UP,
+                        Direction.NORTH_EAST_DOWN, Direction.NORTH_WEST_DOWN, Direction.SOUTH_EAST_DOWN, Direction.SOUTH_WEST_DOWN
                 );
             }
             case SIDE -> {
@@ -92,10 +86,8 @@ public class CraftChunkRegister {
                 }
             }
             case EDGE -> {
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                direction.splitToSide()
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.SIDE, nextDistance)).collect(Collectors.toSet())
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.SIDE, nextDistance,
+                        direction.splitToSide()
                 );
                 ChunkUUID edge = this.chunkId.getRelative(direction);
                 if (!visitedChunks.contains(edge)) {
@@ -104,15 +96,11 @@ public class CraftChunkRegister {
                 }
             }
             case CORNER -> {
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                direction.splitToSide()
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.SIDE, nextDistance)).collect(Collectors.toSet())
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.SIDE, nextDistance,
+                        direction.splitToSide()
                 );
-                propagatedChunks.addAll(
-                        this.propagateTo(visitedChunks,
-                                direction.splitToEdge()
-                        ).stream().map((pair) -> pair.toQuartet(PropagationType.EDGE, nextDistance)).collect(Collectors.toSet())
+                this.propagateTo(propagatedChunks, visitedChunks, PropagationType.EDGE, nextDistance,
+                        direction.splitToEdge()
                 );
                 ChunkUUID corner = this.chunkId.getRelative(direction);
                 if (!visitedChunks.contains(corner)) {
