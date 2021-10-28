@@ -1,12 +1,12 @@
 package ro.nicuch.tag.register;
 
+import com.github.steveice10.mc.protocol.data.game.chunk.Chunk;
 import io.github.NicoNekoDev.SimpleTuples.Quartet;
 import ro.nicuch.tag.CraftTagRegister;
-import ro.nicuch.tag.nbt.ChunkCompoundTag;
 import ro.nicuch.tag.util.Direction;
 import ro.nicuch.tag.util.PropagationType;
-import ro.nicuch.tag.wrapper.ChunkUUID;
-import ro.nicuch.tag.wrapper.RegionUUID;
+import ro.nicuch.tag.wrapper.ChunkPos;
+import ro.nicuch.tag.wrapper.RegionPos;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -18,21 +18,21 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class CraftChunkRegister {
     private final CraftWorldRegister register;
-    private final ChunkUUID chunkId;
+    private final ChunkPos chunkId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.UNLOADED);
-    private final FutureTask<ChunkCompoundTag> loadTask;
+    private final FutureTask<Chunk> loadTask;
 
-    public CraftChunkRegister(CraftWorldRegister register, ChunkUUID chunkId) {
+    public CraftChunkRegister(CraftWorldRegister register, ChunkPos chunkId) {
         this.chunkId = chunkId;
         this.register = register;
         this.loadTask = new FutureTask<>(() -> {
-            ChunkCompoundTag tag = register.getRegion(RegionUUID.fromChunk(chunkId)).getChunkTag(chunkId);
+            Chunk tag = register.getRegion(RegionPos.fromChunk(chunkId)).getChunk(chunkId);
             this.status.set(Status.LOADED);
             return tag;
         });
     }
 
-    public final ChunkUUID getChunkId() {
+    public final ChunkPos getChunkId() {
         return this.chunkId;
     }
 
@@ -40,8 +40,8 @@ public class CraftChunkRegister {
         return this.status.get();
     }
 
-    public final void awaitToLoad() throws ExecutionException, InterruptedException, TimeoutException {
-        this.loadTask.get(30, TimeUnit.SECONDS);
+    public final Chunk loadAndWait() throws ExecutionException, InterruptedException, TimeoutException {
+        return this.loadTask.get(30, TimeUnit.SECONDS);
     }
 
     public final void load() {
@@ -49,18 +49,18 @@ public class CraftChunkRegister {
         CraftTagRegister.getChunkExecutor(this.chunkId.getWorkerThread(CraftTagRegister.getChunkThreads())).submit(this.loadTask);
     }
 
-    private void propagateTo(Set<Quartet<ChunkUUID, Direction, PropagationType, Integer>> propagatedChunks, Set<ChunkUUID> visitedChunks, PropagationType type, int distance, Direction... directions) {
+    private void propagateTo(Set<Quartet<ChunkPos, Direction, PropagationType, Integer>> propagatedChunks, Set<ChunkPos> visitedChunks, PropagationType type, int distance, Direction... directions) {
         for (Direction direction : directions) {
-            ChunkUUID chunkUUID = this.chunkId.getRelative(direction);
-            if (!visitedChunks.contains(chunkUUID)) {
-                propagatedChunks.add(Quartet.of(chunkUUID, direction, type, distance));
-                visitedChunks.add(chunkUUID);
+            ChunkPos chunkPos = this.chunkId.getRelative(direction);
+            if (!visitedChunks.contains(chunkPos)) {
+                propagatedChunks.add(Quartet.of(chunkPos, direction, type, distance));
+                visitedChunks.add(chunkPos);
             }
         }
     }
 
-    public Set<Quartet<ChunkUUID, Direction, PropagationType, Integer>> propagate(Set<ChunkUUID> visitedChunks, Direction direction, PropagationType type, int distance) {
-        Set<Quartet<ChunkUUID, Direction, PropagationType, Integer>> propagatedChunks = new LinkedHashSet<>();
+    public Set<Quartet<ChunkPos, Direction, PropagationType, Integer>> propagate(Set<ChunkPos> visitedChunks, Direction direction, PropagationType type, int distance) {
+        Set<Quartet<ChunkPos, Direction, PropagationType, Integer>> propagatedChunks = new LinkedHashSet<>();
         // NOTE: propagation order is important! sides and then corners!
         int nextDistance = distance - 1;
         switch (type) {
@@ -79,7 +79,7 @@ public class CraftChunkRegister {
                 );
             }
             case SIDE -> {
-                ChunkUUID side = this.chunkId.getRelative(direction);
+                ChunkPos side = this.chunkId.getRelative(direction);
                 if (!visitedChunks.contains(side)) {
                     propagatedChunks.add(Quartet.of(side, direction, PropagationType.SIDE, nextDistance));
                     visitedChunks.add(side);
@@ -89,7 +89,7 @@ public class CraftChunkRegister {
                 this.propagateTo(propagatedChunks, visitedChunks, PropagationType.SIDE, nextDistance,
                         direction.splitToSide()
                 );
-                ChunkUUID edge = this.chunkId.getRelative(direction);
+                ChunkPos edge = this.chunkId.getRelative(direction);
                 if (!visitedChunks.contains(edge)) {
                     propagatedChunks.add(Quartet.of(edge, direction, PropagationType.EDGE, nextDistance));
                     visitedChunks.add(edge);
@@ -102,7 +102,7 @@ public class CraftChunkRegister {
                 this.propagateTo(propagatedChunks, visitedChunks, PropagationType.EDGE, nextDistance,
                         direction.splitToEdge()
                 );
-                ChunkUUID corner = this.chunkId.getRelative(direction);
+                ChunkPos corner = this.chunkId.getRelative(direction);
                 if (!visitedChunks.contains(corner)) {
                     propagatedChunks.add(Quartet.of(corner, direction, PropagationType.CORNER, nextDistance));
                     visitedChunks.add(corner);
@@ -116,7 +116,7 @@ public class CraftChunkRegister {
         if (this.status.get() == Status.UNLOADED)
             return; // hmm...
         try {
-            this.register.getRegion(RegionUUID.fromChunk(this.chunkId)).setChunkTag(this.chunkId, this.loadTask.get());
+            this.register.getRegion(RegionPos.fromChunk(this.chunkId)).setChunk(this.chunkId, this.loadTask.get());
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }

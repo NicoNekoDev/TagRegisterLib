@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public record RegionUUID(int x, int y, int z) {
+public record RegionPos(int x, int y, int z) {
 
     private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
 
@@ -20,14 +20,14 @@ public record RegionUUID(int x, int y, int z) {
         return this.z;
     }
 
-    public static RegionUUID fromString(final String id) {
+    public static RegionPos fromString(final String id) {
         try {
             Matcher matcher = pattern.matcher(id);
             if (matcher.find()) {
                 int x = Integer.parseInt(matcher.group(1));
                 int y = Integer.parseInt(matcher.group(2));
                 int z = Integer.parseInt(matcher.group(3));
-                return new RegionUUID(x, y, z);
+                return new RegionPos(x, y, z);
             } else
                 throw new IllegalArgumentException("RegionUUID couldn't parse from string.");
         } catch (IllegalStateException | NumberFormatException e) {
@@ -35,11 +35,11 @@ public record RegionUUID(int x, int y, int z) {
         }
     }
 
-    public static RegionUUID fromChunk(ChunkUUID id) {
+    public static RegionPos fromChunk(ChunkPos id) {
         int regX = id.getX() >> 5;
         int regY = id.getY() >> 5;
         int regZ = id.getZ() >> 5;
-        return new RegionUUID(regX, regY, regZ);
+        return new RegionPos(regX, regY, regZ);
     }
 
     @Override
@@ -51,7 +51,7 @@ public record RegionUUID(int x, int y, int z) {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        RegionUUID that = (RegionUUID) o;
+        RegionPos that = (RegionPos) o;
         return this.x == that.x && this.y == that.y && this.z == that.z;
     }
 

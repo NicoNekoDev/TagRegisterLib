@@ -68,7 +68,9 @@ public class SelfExpiringMap<K, V> {
             SelfExpiringMap.this.internalMap.remove(key);
             SelfExpiringMap.this.timerTasks.remove(key);
         }, time, timeUnit);
-        this.timerTasks.put(key, future);
+        ScheduledFuture<?> oldFuture = this.timerTasks.put(key, future);
+        if (oldValue != null && oldFuture != null)
+            oldFuture.cancel(true);
         return oldValue;
     }
 

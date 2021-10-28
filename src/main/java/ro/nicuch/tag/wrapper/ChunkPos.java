@@ -1,14 +1,12 @@
 package ro.nicuch.tag.wrapper;
 
-import org.bukkit.World;
-import org.bukkit.block.Block;
 import ro.nicuch.tag.util.Direction;
 
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public record ChunkUUID(int x, int y, int z) {
+public record ChunkPos(int x, int y, int z) {
 
     private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
 
@@ -24,8 +22,8 @@ public record ChunkUUID(int x, int y, int z) {
         return this.z;
     }
 
-    public ChunkUUID getRelative(Direction direction) {
-        return new ChunkUUID(this.x + direction.getModX(), this.y + direction.getModY(), this.z + direction.getModZ());
+    public ChunkPos getRelative(Direction direction) {
+        return new ChunkPos(this.x + direction.getModX(), this.y + direction.getModY(), this.z + direction.getModZ());
     }
 
     public int getWorkerThread(int threads) {
@@ -42,14 +40,14 @@ public record ChunkUUID(int x, int y, int z) {
         return (gridX + gridY + gridZ) % threads;
     }
 
-    public static ChunkUUID fromString(final String id) {
+    public static ChunkPos fromString(final String id) {
         try {
             Matcher matcher = pattern.matcher(id);
             if (matcher.find()) {
                 int x = Integer.parseInt(matcher.group(1));
                 int y = Integer.parseInt(matcher.group(2));
                 int z = Integer.parseInt(matcher.group(3));
-                return new ChunkUUID(x, y, z);
+                return new ChunkPos(x, y, z);
             } else
                 throw new IllegalArgumentException("ChunkUUID couldn't parse from string.");
         } catch (IllegalStateException | NumberFormatException e) {
@@ -57,12 +55,8 @@ public record ChunkUUID(int x, int y, int z) {
         }
     }
 
-    public static ChunkUUID fromLocation(Block block) {
-        return new ChunkUUID(block.getX(), block.getY(), block.getZ());
-    }
-
-    public static Block toLocation(ChunkUUID uuid, World world) {
-        return world.getBlockAt(uuid.getX(), uuid.getY(), uuid.getZ());
+    public static ChunkPos fromLocation(int x, int y, int z) {
+        return new ChunkPos(x >> 5, y >> 5, z >> 5);
     }
 
     @Override
@@ -74,7 +68,7 @@ public record ChunkUUID(int x, int y, int z) {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ChunkUUID that = (ChunkUUID) o;
+        ChunkPos that = (ChunkPos) o;
         return this.x == that.x && this.y == that.y && this.z == that.z;
     }
 

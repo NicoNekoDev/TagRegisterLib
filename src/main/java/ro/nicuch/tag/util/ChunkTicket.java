@@ -1,17 +1,17 @@
 package ro.nicuch.tag.util;
 
-import ro.nicuch.tag.wrapper.ChunkUUID;
+import ro.nicuch.tag.wrapper.ChunkPos;
 
 import java.util.concurrent.TimeUnit;
 
 public final class ChunkTicket {
-    private final ChunkUUID chunkId;
+    private final ChunkPos chunkId;
     private final TicketType ticketType;
     private final int distance;
     private final long time;
     private final TimeUnit timeUnit;
 
-    public ChunkTicket(ChunkUUID chunkId, TicketType ticketType, int distance, long time, TimeUnit timeUnit) {
+    public ChunkTicket(ChunkPos chunkId, TicketType ticketType, int distance, long time, TimeUnit timeUnit) {
         this.chunkId = chunkId;
         this.ticketType = ticketType;
         this.distance = distance;
@@ -19,7 +19,7 @@ public final class ChunkTicket {
         this.timeUnit = timeUnit;
     }
 
-    public ChunkTicket(ChunkUUID chunkId, TicketType ticketType) {
+    public ChunkTicket(ChunkPos chunkId, TicketType ticketType) {
         this(chunkId, ticketType, ticketType.getDefaultDistance(), ticketType.getDefaultTime(), TimeUnit.SECONDS);
     }
 
@@ -35,7 +35,7 @@ public final class ChunkTicket {
         return this.distance;
     }
 
-    public ChunkUUID getChunkId() {
+    public ChunkPos getChunkId() {
         return this.chunkId;
     }
 

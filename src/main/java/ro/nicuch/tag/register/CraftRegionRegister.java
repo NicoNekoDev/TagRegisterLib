@@ -1,21 +1,21 @@
 package ro.nicuch.tag.register;
 
+import com.github.steveice10.mc.protocol.data.game.chunk.Chunk;
 import ro.nicuch.tag.CraftTagRegister;
-import ro.nicuch.tag.nbt.ChunkCompoundTag;
-import ro.nicuch.tag.nbt.region.RegionFile;
-import ro.nicuch.tag.wrapper.ChunkUUID;
-import ro.nicuch.tag.wrapper.RegionUUID;
+import ro.nicuch.tag.util.RegionFile;
+import ro.nicuch.tag.wrapper.ChunkPos;
+import ro.nicuch.tag.wrapper.RegionPos;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class CraftRegionRegister {
-    private final RegionUUID regionId;
+    private final RegionPos regionId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.UNLOADED);
     private final FutureTask<RegionFile> loadTask;
 
-    public CraftRegionRegister(CraftWorldRegister register, RegionUUID regionId) {
+    public CraftRegionRegister(CraftWorldRegister register, RegionPos regionId) {
         this.regionId = regionId;
         this.loadTask = new FutureTask<>(() -> {
             RegionFile region = new RegionFile(register.getWorldFolder().toPath(), this.regionId);
@@ -24,7 +24,7 @@ public class CraftRegionRegister {
         });
     }
 
-    public final RegionUUID getRegionId() {
+    public final RegionPos getRegionId() {
         return this.regionId;
     }
 
@@ -37,22 +37,22 @@ public class CraftRegionRegister {
         CraftTagRegister.getRegionExecutor().submit(this.loadTask);
     }
 
-    public final ChunkCompoundTag getChunkTag(final ChunkUUID chunkId) {
+    public final Chunk getChunk(final ChunkPos chunkPos) {
         if (this.status.get() == Status.UNLOADED)
             this.load();
         try {
-            return this.loadTask.get().getChunkCompoundTag(chunkId.getX(), chunkId.getY(), chunkId.getZ());
+            return this.loadTask.get().getChunkCompoundTag(chunkPos.getX(), chunkPos.getY(), chunkPos.getZ());
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
         return null;
     }
 
-    public final void setChunkTag(final ChunkUUID chunkId, ChunkCompoundTag tag) {
+    public final void setChunk(final ChunkPos chunkPos, Chunk chunk) {
         if (this.status.get() == Status.UNLOADED)
             this.load();
         try {
-            this.loadTask.get().putChunkCompoundTag(chunkId.getX(), chunkId.getY(), chunkId.getZ(), tag);
+            this.loadTask.get().putChunkCompoundTag(chunkPos.getX(), chunkPos.getY(), chunkPos.getZ(), chunk);
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
