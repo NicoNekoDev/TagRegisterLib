@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.2.2'
+}
+
+group = "ro.nico.tag"
+version = "1.0-SNAPSHOT"
+
+build {
+    dependsOn(shadowJar)
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+shadowJar {
+    relocate('org.google.guava', 'ro.nico.tag.libs.guava')
+    relocate('it.unimi.dsi', 'ro.nico.tag.libs.fastutil')
+    archiveClassifier = ''
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+    maven {
+        url = 'https://jitpack.io'
+    }
+}
+
+dependencies{
+    compileOnly('io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT')
+    implementation('io.github.NicoNekoDev:simpletuples:1.0.1')
+    implementation('it.unimi.dsi:fastutil:8.5.18')
+    implementation('com.google.guava:guava:33.5.0-jre')
+}
+
+processResources {
+    filesMatching("plugin.yml") {
+        expand("projectVersion": project.version)
+    }
+}
