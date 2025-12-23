@@ -417,7 +417,7 @@ public final class ListTag extends AbstractList<Tag> implements IndexedCollectio
     public int bufferDataSize() {
 
 
-        return 1 + // 1 byte from type
+        return this.type.bufferDataSize() + // x byte from type
                 4 + // 4 bytes from size of tags
                 this.tags.stream().mapToInt(Tag::bufferDataSize).sum(); // x bytes for each tag
     }
@@ -426,7 +426,7 @@ public final class ListTag extends AbstractList<Tag> implements IndexedCollectio
     public ListTag read(ByteBuffer input, int depth) {
         if (depth > MAX_DEPTH)
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
-        this.type = TagType.of(input.get());
+        this.type = TagType.of(input);
         final int length = input.getInt();
         for (int i = 0; i < length; i++) {
             final Tag tag = this.type.create();
@@ -438,7 +438,7 @@ public final class ListTag extends AbstractList<Tag> implements IndexedCollectio
 
     @Override
     public ListTag write(ByteBuffer output) {
-        output.put(this.type.id());
+        this.type.to(output);
         output.putInt(this.tags.size());
         for (Tag tag : this.tags)
             tag.write(output);

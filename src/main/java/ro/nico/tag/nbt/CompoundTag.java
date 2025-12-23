@@ -521,7 +521,7 @@ public final class CompoundTag implements CollectionTag {
      * with the specified key, or has a tag with a different type
      */
     public ChunkCompoundTag getChunkCompound(final String key) {
-        if (this.contains(key, TagType.CHUNK_COMPOUND))
+        if (this.contains(key, TagType.CHUNK))
             return (ChunkCompoundTag) this.tags.get(key);
         return new ChunkCompoundTag();
     }
@@ -775,7 +775,7 @@ public final class CompoundTag implements CollectionTag {
      * @return {@code true} if this compound has a compound tag with the specified key
      */
     public boolean containsChunkCompound(final String key) {
-        return this.contains(key, TagType.CHUNK_COMPOUND);
+        return this.contains(key, TagType.CHUNK);
     }
 
     /**
@@ -876,9 +876,8 @@ public final class CompoundTag implements CollectionTag {
     @Override
     public int bufferDataSize() {
         return 4 // 4 bytes for size
-                + this.tags.size() // 1 byte for each type
                 + this.tags.keySet().stream().mapToInt(str -> str.length() * 2).sum() // x bytes for each key, 2 bytes for each char
-                + this.tags.values().stream().mapToInt(Tag::bufferDataSize).sum(); // x bytes for each tag
+                + this.tags.values().stream().mapToInt(tag -> tag.bufferDataSize() + tag.type().bufferDataSize()).sum(); // x bytes for each tag + type
     }
 
     @Override
@@ -887,7 +886,7 @@ public final class CompoundTag implements CollectionTag {
             throw new IllegalStateException(String.format("Depth of %d is higher than max of %d", depth, MAX_DEPTH));
         int size = input.getInt();
         for (int n = 0; n < size; n++) {
-            TagType type = TagType.of(input.get());
+            TagType type = TagType.of(input);
             final int keyLength = input.getInt();
             final char[] keyArr = new char[keyLength];
             for (int i = 0; i < keyLength; i++)
@@ -908,7 +907,7 @@ public final class CompoundTag implements CollectionTag {
             if (tag instanceof CollectionTag)
                 if (((CollectionTag) tag).isEmpty())
                     continue; //skip empty collection tags
-            output.put(tag.type().id());
+            tag.type().to(output);
             final String key = tagsEntry.getKey();
             final char[] keyArr = key.toCharArray();
             output.putInt(keyArr.length);

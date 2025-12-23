@@ -1,5 +1,6 @@
 package ro.nico.tag.wrapper;
 
+import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
@@ -42,6 +43,10 @@ public record WorldId(String name) {
 
     public static WorldId fromWorld(String name) {
         return new WorldId(name);
+    }
+
+    public static WorldId fromWorld(World world) {
+        return fromWorld(world.getName());
     }
 
     @Override

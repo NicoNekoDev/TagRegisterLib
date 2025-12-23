@@ -141,7 +141,7 @@ public final class ChunkCompoundTag implements Tag {
 
     @Override
     public TagType type() {
-        return TagType.CHUNK_COMPOUND;
+        return TagType.CHUNK;
     }
 
     @Override

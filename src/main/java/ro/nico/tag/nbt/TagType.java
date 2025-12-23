@@ -1,80 +1,97 @@
 package ro.nico.tag.nbt;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
  * An enumeration of tag types.
  */
-public enum TagType implements Predicate<TagType> {
+public class TagType implements Predicate<TagType> {
     /**
      * @see EndTag
      */
-    END((byte) 0, EndTag::new),
+    public static TagType END = new TagType("tag:end", EndTag::new);
     /**
      * @see ByteTag
      */
-    BYTE((byte) 1, true, ByteTag::new),
+    public static TagType BYTE = new TagType("tag:byte", true, ByteTag::new);
     /**
      * @see ShortTag
      */
-    SHORT((byte) 2, true, ShortTag::new),
+    public static TagType SHORT = new TagType("tag:short", true, ShortTag::new);
     /**
      * @see IntTag
      */
-    INT((byte) 3, true, IntTag::new),
+    public static TagType INT = new TagType("tag:int", true, IntTag::new);
     /**
      * @see LongTag
      */
-    LONG((byte) 4, true, LongTag::new),
+    public static TagType LONG = new TagType("tag:long", true, LongTag::new);
     /**
      * @see FloatTag
      */
-    FLOAT((byte) 5, true, FloatTag::new),
+    public static TagType FLOAT = new TagType("tag:float", true, FloatTag::new);
     /**
      * @see DoubleTag
      */
-    DOUBLE((byte) 6, true, DoubleTag::new),
+    public static TagType DOUBLE = new TagType("tag:double", true, DoubleTag::new);
     /**
      * @see ByteArrayTag
      */
-    BYTE_ARRAY((byte) 7, ByteArrayTag::new),
+    public static TagType BYTE_ARRAY = new TagType("tag:byte-array", ByteArrayTag::new);
     /**
      * @see StringTag
      */
-    STRING((byte) 8, StringTag::new),
+    public static TagType STRING = new TagType("tag:string", StringTag::new);
     /**
      * @see ListTag
      */
-    LIST((byte) 9, ListTag::new),
+    public static TagType LIST = new TagType("tag:list", ListTag::new);
     /**
      * @see CompoundTag
      */
-    COMPOUND((byte) 10, CompoundTag::new),
+    public static TagType COMPOUND = new TagType("tag:compound", CompoundTag::new);
     /**
      * @see IntArrayTag
      */
-    INT_ARRAY((byte) 11, IntArrayTag::new),
+    public static TagType INT_ARRAY = new TagType("tag:int-array", IntArrayTag::new);
     /**
      * @see LongArrayTag
      */
-    LONG_ARRAY((byte) 12, LongArrayTag::new),
+    public static TagType LONG_ARRAY = new TagType("tag:long-array", LongArrayTag::new);
     /**
      * @see StringArrayTag
      */
-    STRING_ARRAY((byte) 13, StringArrayTag::new),
+    public static TagType STRING_ARRAY = new TagType("tag:string-array", StringArrayTag::new);
     /**
      * @see BigIntegerTag
      */
-    BIG_INT((byte) 14, BigIntegerTag::new),
+    public static TagType BIG_INT = new TagType("tag:big-int", BigIntegerTag::new);
+    /**
+     * @see ChunkCompoundTag
+     */
+    public static TagType CHUNK = new TagType("tag:chunk", ChunkCompoundTag::new);
 
-    CHUNK_COMPOUND((byte) 15, ChunkCompoundTag::new);
+    private static final ConcurrentMap<String, TagType> REGISTRY = new ConcurrentHashMap<>();
 
-    private static final TagType[] TYPES = values();
+    public static TagType register(final String id, final Supplier<Tag> factory) {
+        return register(id, false, factory);
+    }
+
+    public static TagType register(final String id, final boolean number, final Supplier<Tag> factory) {
+        if (REGISTRY.containsKey(id.toLowerCase()))
+            throw new IllegalArgumentException("Tag type " + id + " is already registered!");
+        return new TagType(id, number, factory);
+    }
+
     /**
      * The byte id of this tag type.
      */
-    private final byte id;
+    private final String id;
     /**
      * If this tag type is a {@link NumberTag number} type.
      */
@@ -84,14 +101,15 @@ public enum TagType implements Predicate<TagType> {
      */
     private final Supplier<Tag> factory;
 
-    TagType(final byte id, final Supplier<Tag> factory) {
+    private TagType(final String id, final Supplier<Tag> factory) {
         this(id, false, factory);
     }
 
-    TagType(final byte id, final boolean number, final Supplier<Tag> factory) {
+    private TagType(final String id, final boolean number, final Supplier<Tag> factory) {
         this.id = id;
         this.number = number;
         this.factory = factory;
+        REGISTRY.put(id, this);
     }
 
     /**
@@ -99,7 +117,7 @@ public enum TagType implements Predicate<TagType> {
      *
      * @return the byte id
      */
-    public byte id() {
+    public String id() {
         return this.id;
     }
 
@@ -126,14 +144,26 @@ public enum TagType implements Predicate<TagType> {
         return this == that || (this.number && that.number);
     }
 
+    public void to(final ByteBuffer buffer) {
+        byte[] array = this.id.toLowerCase().getBytes(StandardCharsets.UTF_8);
+        buffer.put((byte) array.length);
+        buffer.put(array);
+    }
+
+    public int bufferDataSize() {
+        return this.id.toLowerCase().getBytes(StandardCharsets.UTF_8).length + 1;
+    }
+
     /**
      * Gets the tag type for the specified id.
      *
-     * @param id the id
+     * @param buffer the buffer
      * @return the tag type
-     * @throws ArrayIndexOutOfBoundsException if the id is not without bounds
      */
-    public static TagType of(final byte id) {
-        return TYPES[id];
+    public static TagType of(final ByteBuffer buffer) {
+        byte[] array = new byte[buffer.get()];
+        buffer.get(array);
+        String type = new String(array, StandardCharsets.UTF_8);
+        return REGISTRY.get(type.toLowerCase());
     }
 }
