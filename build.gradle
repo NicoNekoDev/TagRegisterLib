@@ -10,13 +10,11 @@ build {
     dependsOn(shadowJar)
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
-}
-
 shadowJar {
     relocate('org.google.guava', 'ro.nico.tag.libs.guava')
     relocate('it.unimi.dsi', 'ro.nico.tag.libs.fastutil')
+    relocate('com.github.luben.zstd', 'ro.nico.tag.libs.zstd')
+    relocate('at.yawk.lz4', 'ro.nico.tag.libs.lz4')
     archiveClassifier = ''
 }
 
@@ -32,11 +30,16 @@ repositories {
     }
 }
 
-dependencies{
+dependencies {
     compileOnly('io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT')
     implementation('io.github.NicoNekoDev:simpletuples:1.0.1')
     implementation('it.unimi.dsi:fastutil:8.5.18')
     implementation('com.google.guava:guava:33.5.0-jre')
+    implementation('com.github.luben:zstd-jni:1.5.7-6')
+    implementation('at.yawk.lz4:lz4-java:1.10.2')
+
+    compileOnly("org.projectlombok:lombok:1.18.42")
+    annotationProcessor("org.projectlombok:lombok:1.18.42")
 }
 
 processResources {

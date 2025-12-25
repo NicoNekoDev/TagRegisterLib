@@ -15,11 +15,17 @@ public class SelfExpiringMap<K, V> {
     private final TripletConsumer<K, V, EvictionType> removeCallback;
 
     public SelfExpiringMap() {
-        this((key, value, type) -> {}, 16, Executors.newSingleThreadScheduledExecutor());
+        this((key, value, type) -> {
+        }, 16, Executors.newSingleThreadScheduledExecutor());
     }
 
     public SelfExpiringMap(TripletConsumer<K, V, EvictionType> removeCallback, ScheduledExecutorService executor) {
         this(removeCallback, 16, executor);
+    }
+
+    public SelfExpiringMap(ScheduledExecutorService executor) {
+        this((key, value, type) -> {
+        }, 16, executor);
     }
 
     public SelfExpiringMap(TripletConsumer<K, V, EvictionType> removeCallback, int capacity, ScheduledExecutorService executor) {

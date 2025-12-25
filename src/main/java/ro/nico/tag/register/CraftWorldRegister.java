@@ -14,14 +14,13 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("ResultOfMethodCallIgnored")
 public class CraftWorldRegister {
     private final WorldId worldId;
     private final File worldDataFolder;
     private final SelfExpiringMap<ChunkPos, ChunkTicket> chunkTickets;
     private final LoadingCache<RegionPos, CraftRegionRegister> regions;
     private final LoadingCache<ChunkPos, CraftChunkRegister> chunks;
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat("World-Scheduler-%d").build());
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5, new ThreadFactoryBuilder().setNameFormat("World-Scheduler-%d").build());
 
     public CraftWorldRegister(WorldId worldId) {
         this.worldId = worldId;
@@ -51,9 +50,7 @@ public class CraftWorldRegister {
                         return new CraftChunkRegister(CraftWorldRegister.this, chunkPos);
                     }
                 });
-        this.chunkTickets = new SelfExpiringMap<>((key, value, type) -> {
-            // System.out.println("REMOVED " + key.toString() + " WITH " + type.name().toLowerCase());
-        }, this.scheduler);
+        this.chunkTickets = new SelfExpiringMap<>(this.scheduler);
         this.scheduler.scheduleAtFixedRate(this::propagationTick, 0, 1, TimeUnit.MILLISECONDS);
     }
 

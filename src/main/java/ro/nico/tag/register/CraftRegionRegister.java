@@ -1,7 +1,7 @@
 package ro.nico.tag.register;
 
 import ro.nico.tag.CraftTagRegister;
-import ro.nico.tag.nbt.ChunkCompoundTag;
+import ro.nico.tag.nbt.tags.collection.CompoundTag;
 import ro.nico.tag.util.RegionFile;
 import ro.nico.tag.wrapper.ChunkPos;
 import ro.nico.tag.wrapper.RegionPos;
@@ -39,7 +39,7 @@ public class CraftRegionRegister {
         CraftTagRegister.getRegionExecutor().submit(this.loadTask);
     }
 
-    public final ChunkCompoundTag getChunk(final ChunkPos chunkPos) {
+    public final CompoundTag getChunk(final ChunkPos chunkPos) {
         if (this.status.get() == Status.UNLOADED)
             this.load();
         try {
@@ -50,7 +50,7 @@ public class CraftRegionRegister {
         return null;
     }
 
-    public final void setChunk(final ChunkPos chunkPos, ChunkCompoundTag chunk) {
+    public final void setChunk(final ChunkPos chunkPos, CompoundTag chunk) {
         if (this.status.get() == Status.UNLOADED)
             this.load();
         try {

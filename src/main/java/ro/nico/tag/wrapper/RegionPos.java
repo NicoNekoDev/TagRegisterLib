@@ -1,25 +1,27 @@
 package ro.nico.tag.wrapper;
 
+import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
+import ro.nico.tag.util.Direction;
 
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public record RegionPos(int x, int y, int z) {
+public class RegionPos {
+    @Getter
+    private final int x, y, z;
+
+    private RegionPos(int x, int y, int z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
 
     private final static Pattern pattern = Pattern.compile("<x([-]?[0-9]+),y([-]?[0-9]+),z([-]?[0-9]+)>");
 
-    public int getX() {
-        return this.x;
-    }
-
-    public int getY() {
-        return this.y;
-    }
-
-    public int getZ() {
-        return this.z;
+    public RegionPos getRelative(Direction direction) {
+        return new RegionPos(this.x + direction.getModX(), this.y + direction.getModY(), this.z + direction.getModZ());
     }
 
     public static RegionPos fromString(final String id) {
@@ -51,11 +53,8 @@ public record RegionPos(int x, int y, int z) {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        RegionPos that = (RegionPos) o;
-        return this.x == that.x && this.y == that.y && this.z == that.z;
+    public boolean equals(Object that) {
+        return this == that || (that instanceof RegionPos other && this.x == other.x && this.y == other.y && this.z == other.z);
     }
 
     @Override

@@ -2,7 +2,7 @@ package ro.nico.tag.register;
 
 import io.github.NicoNekoDev.SimpleTuples.Quartet;
 import ro.nico.tag.CraftTagRegister;
-import ro.nico.tag.nbt.ChunkCompoundTag;
+import ro.nico.tag.nbt.tags.collection.CompoundTag;
 import ro.nico.tag.util.Direction;
 import ro.nico.tag.util.PropagationType;
 import ro.nico.tag.wrapper.ChunkPos;
@@ -21,13 +21,13 @@ public class CraftChunkRegister {
     private final CraftWorldRegister register;
     private final ChunkPos chunkId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.UNLOADED);
-    private final FutureTask<ChunkCompoundTag> loadTask;
+    private final FutureTask<CompoundTag> loadTask;
 
     public CraftChunkRegister(CraftWorldRegister register, ChunkPos chunkId) {
         this.chunkId = chunkId;
         this.register = register;
         this.loadTask = new FutureTask<>(() -> {
-            ChunkCompoundTag tag = register.getRegion(RegionPos.fromChunk(chunkId)).getChunk(chunkId);
+            CompoundTag tag = register.getRegion(RegionPos.fromChunk(chunkId)).getChunk(chunkId);
             this.status.set(Status.LOADED);
             return tag;
         });
@@ -41,7 +41,7 @@ public class CraftChunkRegister {
         return this.status.get();
     }
 
-    public final ChunkCompoundTag loadAndWait() throws ExecutionException, InterruptedException, TimeoutException {
+    public final CompoundTag loadAndWait() throws ExecutionException, InterruptedException, TimeoutException {
         return this.loadTask.get(30, TimeUnit.SECONDS);
     }
 
